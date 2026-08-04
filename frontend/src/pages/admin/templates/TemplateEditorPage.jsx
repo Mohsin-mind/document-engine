@@ -17,6 +17,7 @@ export default function TemplateEditorPage() {
   );
   const [notice, setNotice] = useState('');
   const [error, setError] = useState('');
+  const [validation, setValidation] = useState(null);
 
   const { data: template, isLoading, isError, error: queryError } = useQuery({
     queryKey: ['template', id],
@@ -27,10 +28,9 @@ export default function TemplateEditorPage() {
     if (template) {
       const v = template.versions[0];
       if (!mappings && v) {
-        const def = v.definition?.mappings || {};
         const next = {};
         for (const variable of v.extractedVariables) {
-          next[variable.name] = def[variable.name] ?? identityPath(variable.name, variable.type);
+          next[variable.name] = variable.jsonPath ?? identityPath(variable.name, variable.type);
         }
         setMappings(next);
       }
@@ -39,7 +39,10 @@ export default function TemplateEditorPage() {
 
   const saveMut = useMutation({
     mutationFn: (vId) => saveMappings(id, vId, { mappings, sampleCanonical: JSON.parse(sampleText) }),
-    onSuccess: () => setNotice('Mappings saved and validated'),
+    onSuccess: (saved) => {
+      setValidation(saved.validation || null);
+      setNotice('Mappings saved and validated');
+    },
     onError: (e) => setError(e.message),
   });
 
@@ -143,21 +146,29 @@ export default function TemplateEditorPage() {
 
       <div className="rounded-lg border border-gray-200 bg-white p-4 space-y-3">
         <p className="text-sm font-semibold text-gray-700">
-          Extracted variables <span className="font-normal text-gray-400">({v.extractedVariables.length})</span>
+          Extracted variables{' '}
+          <span className="font-normal text-gray-400">
+            ({v.extractedVariables.filter((x) => x.jsonPath).length} of {v.extractedVariables.length} mapped)
+          </span>
         </p>
         <div className="flex flex-wrap gap-1.5">
-          {v.extractedVariables.map((variable) => (
-            <span
-              key={variable.name}
-              className={`rounded-full px-2 py-0.5 text-xs font-mono ${
-                variable.type === 'loop'
-                  ? 'bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200'
-                  : 'bg-gray-100 text-gray-700'
-              }`}
-            >
-              {variable.type === 'loop' ? `{#${variable.name}}` : `{${variable.name}}`}
-            </span>
-          ))}
+          {v.extractedVariables.map((variable) => {
+            const mapped = Boolean(variable.jsonPath);
+            return (
+              <span
+                key={variable.name}
+                className={`rounded-full px-2 py-0.5 text-xs font-mono ${
+                  variable.type === 'loop'
+                    ? 'bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200'
+                    : mapped
+                      ? 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200'
+                      : 'bg-gray-100 text-gray-700'
+                }`}
+              >
+                {variable.type === 'loop' ? `{#${variable.name}}` : `{${variable.name}}`}
+              </span>
+            );
+          })}
         </div>
       </div>
 
@@ -166,20 +177,37 @@ export default function TemplateEditorPage() {
         <p className="text-xs text-gray-500">
           Loops use <span className="font-mono">path[]</span>, item fields use{' '}
           <span className="font-mono">children[].name</span>. Paths are validated against the sample canonical
-          payload below.
+          payload below; per-row ✓ previews appear after Save &amp; validate.
         </p>
         <div className="grid grid-cols-[1fr_1fr] gap-2">
-          {Object.entries(mappings || {}).map(([tag, path]) => (
-            <div key={tag} className="flex items-center gap-2">
-              <span className="w-40 truncate font-mono text-xs text-gray-600">{tag}</span>
-              <span className="text-gray-300">→</span>
-              <input
-                value={path}
-                onChange={(e) => setMappings({ ...mappings, [tag]: e.target.value })}
-                className="flex-1 rounded border border-gray-300 px-2 py-1 text-xs font-mono"
-              />
-            </div>
-          ))}
+          {Object.entries(mappings || {}).map(([tag, path]) => {
+            const result = validation?.find((r) => r.docxTag === tag);
+            return (
+              <div key={tag} className="flex flex-col gap-1">
+                <div className="flex items-center gap-2">
+                  <span className="w-40 truncate font-mono text-xs text-gray-600">{tag}</span>
+                  <span className="text-gray-300">→</span>
+                  <input
+                    value={path}
+                    onChange={(e) => {
+                      setMappings({ ...mappings, [tag]: e.target.value });
+                      setValidation(null);
+                    }}
+                    className="flex-1 rounded border border-gray-300 px-2 py-1 text-xs font-mono"
+                  />
+                </div>
+                {result && (
+                  <p
+                    className={`ml-40 text-[11px] font-mono ${
+                      result.ok ? 'text-emerald-600' : 'text-red-600'
+                    }`}
+                  >
+                    {result.ok ? `✓ ${result.sampleValue}` : `✗ ${result.message}`}
+                  </p>
+                )}
+              </div>
+            );
+          })}
         </div>
 
         <div>

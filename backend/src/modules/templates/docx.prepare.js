@@ -4,10 +4,6 @@ const OPENERS = { '[': ']', '{': '}' };
 const INVALID_NAME_CHARS = /[\{\}\[\]]/;
 const XML_PART_NAMES = ['word/document.xml', 'word/header1.xml', 'word/header2.xml', 'word/header3.xml', 'word/footer1.xml', 'word/footer2.xml', 'word/footer3.xml'];
 
-function stripBrackets(text) {
-  return text.replace(/[\{\}\[\]]/g, '');
-}
-
 function scanTokens(full) {
   const tokens = [];
   let i = 0;
@@ -27,6 +23,10 @@ function scanTokens(full) {
           kind = 'loop-close';
         }
         if (name && !INVALID_NAME_CHARS.test(name)) {
+          if (ch === '[' && (/\d/.test(name) || !/^[A-Z]/.test(name))) {
+            i = end + 1;
+            continue;
+          }
           tokens.push({ name, kind, start: i, end });
           i = end + 1;
           continue;
@@ -78,32 +78,22 @@ function processParagraphXml(p) {
 }
 
 function processRunXml(raw, run, runStart, tokens) {
-  const runEnd = runStart + run.tContent.length;
-
-  const segs = [];
-  for (const t of tokens) {
-    const contentStart = t.start + 1;
-    const contentEnd = t.end;
-    const s = Math.max(contentStart, runStart);
-    const e = Math.min(contentEnd, runEnd);
-    if (e - s > 0) segs.push({ ...t, s: s - runStart, e: e - runStart });
-  }
-
-  if (segs.length === 0) {
-    return rewriteRunText(run, stripBrackets(run.tContent));
-  }
-
-  const replaced = [];
+  let out = '';
   let pos = 0;
-  for (const seg of segs) {
-    replaced.push(stripBrackets(run.tContent.slice(pos, seg.s)));
-    replaced.push(
-      seg.kind === 'loop-open' ? `{#${seg.name}}` : seg.kind === 'loop-close' ? `{/${seg.name}}` : `{${seg.name}}`
-    );
-    pos = seg.e + 1;
+  while (pos < run.tContent.length) {
+    const absolutePos = runStart + pos;
+    const token = tokens.find((t) => absolutePos >= t.start && absolutePos <= t.end);
+    if (!token) {
+      out += run.tContent[pos];
+      pos += 1;
+      continue;
+    }
+    if (absolutePos === token.start) {
+      out += token.kind === 'loop-open' ? `{#${token.name}}` : token.kind === 'loop-close' ? `{/${token.name}}` : `{${token.name}}`;
+    }
+    pos = Math.min(token.end + 1 - runStart, run.tContent.length);
   }
-  replaced.push(stripBrackets(run.tContent.slice(pos)));
-  return rewriteRunText(run, replaced.join(''));
+  return rewriteRunText(run, out);
 }
 
 function rewriteRunText(run, text) {

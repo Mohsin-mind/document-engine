@@ -227,6 +227,69 @@ export default function RulesEditorPage() {
         />
       </div>
 
+      <div className="rounded-lg border border-gray-200 bg-white p-4 space-y-3">
+        <p className="text-sm font-semibold text-gray-700">Group item mapping (groupMaps)</p>
+        <p className="text-xs text-gray-500">
+          Map each row of an included group to extra canonical fields. Placeholders use{' '}
+          {'{item.<field>}'} (e.g. fullName → {'{item.name}'}); template mappings then read it as{' '}
+          <code className="text-indigo-600">children[0].fullName</code>.
+        </p>
+        {(definition.includeGroups || []).length === 0 && (
+          <p className="text-xs text-gray-400">Add groups above to map their rows.</p>
+        )}
+        {(definition.includeGroups || []).map((group) => {
+          const maps = definition.groupMaps?.[group] || {};
+          const update = (next) => {
+            const groupMaps = { ...(definition.groupMaps || {}) };
+            if (Object.keys(next).length === 0) delete groupMaps[group];
+            else groupMaps[group] = next;
+            setDefinition({ ...definition, groupMaps });
+          };
+          return (
+            <div key={group} className="rounded-md border border-indigo-100 bg-indigo-50/40 p-3 space-y-2">
+              <p className="text-xs font-mono font-semibold text-indigo-700">{group}[] → row fields</p>
+              {Object.entries(maps).map(([key, template]) => (
+                <div key={key} className="flex gap-2 items-center">
+                  <input
+                    value={key}
+                    onChange={(e) => {
+                      const next = { ...maps };
+                      delete next[key];
+                      next[e.target.value] = template;
+                      update(next);
+                    }}
+                    placeholder="canonical field (e.g. fullName)"
+                    className="w-56 rounded border border-gray-300 px-2 py-1 text-xs font-mono"
+                  />
+                  <input
+                    value={template}
+                    onChange={(e) => update({ ...maps, [key]: e.target.value })}
+                    placeholder={'{item.name}'}
+                    className="flex-1 rounded border border-gray-300 px-2 py-1 text-xs font-mono"
+                  />
+                  <button
+                    onClick={() => {
+                      const next = { ...maps };
+                      delete next[key];
+                      update(next);
+                    }}
+                    className="text-xs text-red-600 hover:underline"
+                  >
+                    Remove
+                  </button>
+                </div>
+              ))}
+              <button
+                onClick={() => update({ ...maps, field: '{item.name}' })}
+                className="rounded-md border border-dashed border-indigo-300 px-3 py-1 text-xs text-indigo-600 hover:bg-indigo-50"
+              >
+                + Add field map
+              </button>
+            </div>
+          );
+        })}
+      </div>
+
       <div className="flex items-center gap-3">
         <button
           onClick={() => saveMut.mutate({ definition })}

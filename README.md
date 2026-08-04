@@ -38,4 +38,6 @@ npm run dev:frontend   # http://localhost:4000
 - ✅ Phase 4 (Templates) — upload, variable extraction, mapping, render/PDF tests, publish pipeline
 - ✅ Phase 5 (Customer Simulation) — dynamic renderer, conditions, repeatable groups, draft/submit
 - ✅ Phase 6 (Validation & Document Preparation) — canonical payload + document preview
-- ⏳ Phase 7 (Document Generation) — next
+- ✅ Phase 7 (Document Generation) — per-document BullMQ jobs (docx → pdf), DB-backed job status, SSE progress to frontend, retries/limits
+- ✅ Phase 8 (Download Center) — final documents auto-generated in background after submit and appear in Download Center (no admin review required; review API kept dormant for future use)
+- ⏳ Phase 9 (E-Sign) — future

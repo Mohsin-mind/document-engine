@@ -67,6 +67,7 @@ function resolveMapping(canonical, path) {
 
 function validateMappings(canonical, mappings) {
   const errors = [];
+  const results = [];
   const entries = Array.isArray(mappings)
     ? mappings
     : Object.entries(mappings || {}).map(([docxTag, canonicalPath]) => ({ docxTag, canonicalPath }));
@@ -74,10 +75,12 @@ function validateMappings(canonical, mappings) {
   for (const { docxTag, canonicalPath } of entries) {
     if (!docxTag || !docxTag.trim()) {
       errors.push({ tag: docxTag || '(empty)', message: 'Mapping tag is empty' });
+      results.push({ docxTag: docxTag || '(empty)', canonicalPath, ok: false, message: 'Mapping tag is empty' });
       continue;
     }
     if (!canonicalPath || !canonicalPath.trim()) {
       errors.push({ tag: docxTag, message: 'No canonical path set' });
+      results.push({ docxTag, canonicalPath, ok: false, message: 'No canonical path set' });
       continue;
     }
     const result = resolveMapping(canonical, canonicalPath);
@@ -88,10 +91,21 @@ function validateMappings(canonical, mappings) {
           : result.kind === 'item'
             ? `"${result.arrayPath}" is not an array or has no "${result.sub}" on its items`
             : `path not found in sample canonical payload`;
-      errors.push({ tag: docxTag, message: `Invalid path "${canonicalPath}": ${what}` });
+      const message = `Invalid path "${canonicalPath}": ${what}`;
+      errors.push({ tag: docxTag, message });
+      results.push({ docxTag, canonicalPath, ok: false, message });
+      continue;
     }
+    let sampleValue;
+    if (result.kind === 'loop') sampleValue = `${(result.value || []).length} items`;
+    else if (result.kind === 'item') {
+      const first = result.value && result.value[0];
+      const resolved = first != null ? getByPath(first, result.sub) : undefined;
+      sampleValue = resolved !== undefined ? String(resolved) : '—';
+    } else sampleValue = String(result.value);
+    results.push({ docxTag, canonicalPath, ok: true, sampleValue });
   }
-  return { valid: errors.length === 0, errors, entries };
+  return { valid: errors.length === 0, errors, entries, results };
 }
 
 function buildRenderContext(canonical, mappings) {
@@ -128,4 +142,12 @@ function buildRenderContext(canonical, mappings) {
   return ctx;
 }
 
-module.exports = { getByPath, setByPath, resolveMapping, validateMappings, buildRenderContext };
+function mappingsFromVariables(variables) {
+  const out = {};
+  for (const v of variables || []) {
+    if (v && v.jsonPath) out[v.name] = v.jsonPath;
+  }
+  return out;
+}
+
+module.exports = { getByPath, setByPath, resolveMapping, validateMappings, buildRenderContext, mappingsFromVariables };

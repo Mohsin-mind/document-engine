@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { getDownloads } from '../../api/downloads.js';
+import { deleteSubmission } from '../../api/submissions.js';
 
 const JOB_STATUS_COLOR = {
   queued: 'bg-gray-100 text-gray-600',
@@ -18,7 +19,6 @@ const JOB_STATUS_LABEL = {
 };
 
 function ArtifactPill({ artifact }) {
-  const review = artifact.review;
   return (
     <div className="flex flex-col gap-1 text-xs">
       <div className="flex items-center gap-2 flex-wrap">
@@ -26,42 +26,9 @@ function ArtifactPill({ artifact }) {
           href={artifact.url}
           className="inline-flex items-center gap-1 rounded border border-gray-300 px-2 py-0.5 text-gray-700 hover:bg-gray-50 font-medium"
         >
-          ↓ {artifact.kind.toUpperCase()}
-          <span className="text-gray-400 font-normal">(original)</span>
+          ↓ {artifact.kind.toUpperCase()} <span className="text-gray-400 font-normal">(final)</span>
         </a>
-        {review?.reviewedDocxUrl && (
-          <a
-            href={review.reviewedDocxUrl}
-            className="inline-flex items-center gap-1 rounded border border-blue-300 px-2 py-0.5 text-blue-700 hover:bg-blue-50"
-          >
-            ↓ DOCX <span className="text-blue-400">(reviewed)</span>
-          </a>
-        )}
-        {review?.reviewedPdfUrl && (
-          <a
-            href={review.reviewedPdfUrl}
-            className="inline-flex items-center gap-1 rounded border border-blue-300 px-2 py-0.5 text-blue-700 hover:bg-blue-50"
-          >
-            ↓ PDF <span className="text-blue-400">(reviewed)</span>
-          </a>
-        )}
       </div>
-      {review && (
-        <span
-          className={`self-start rounded-full px-2 py-0.5 text-xs font-medium ${
-            review.status === 'approved'
-              ? 'bg-green-100 text-green-700'
-              : review.status === 'rejected'
-              ? 'bg-red-100 text-red-700'
-              : 'bg-yellow-50 text-yellow-700'
-          }`}
-        >
-          Review: {review.status}
-          {review.status === 'approved' && review.approvedAt
-            ? ` · ${new Date(review.approvedAt).toLocaleDateString()}`
-            : ''}
-        </span>
-      )}
     </div>
   );
 }
@@ -112,6 +79,7 @@ export default function DownloadsPage() {
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [deleting, setDeleting] = useState('');
   const LIMIT = 20;
 
   const load = async (p = 1) => {
@@ -128,6 +96,20 @@ export default function DownloadsPage() {
     }
   };
 
+  const handleDelete = async (submission) => {
+    if (!window.confirm(`Delete submission ${submission.id.slice(0, 8)}… and all its generated documents?`)) return;
+    setDeleting(submission.id);
+    setError('');
+    try {
+      await deleteSubmission(submission.id);
+      await load(page);
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setDeleting('');
+    }
+  };
+
   useEffect(() => {
     load(page);
   }, [page]);
@@ -138,12 +120,6 @@ export default function DownloadsPage() {
     (acc, s) => acc + s.jobs.filter((j) => j.status === 'completed').length,
     0
   );
-  const approvedDocs = submissions.reduce(
-    (acc, s) =>
-      acc +
-      s.jobs.filter((j) => j.artifacts.some((a) => a.review?.status === 'approved')).length,
-    0
-  );
 
   return (
     <div className="max-w-5xl mx-auto space-y-6">
@@ -152,7 +128,7 @@ export default function DownloadsPage() {
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Download Center</h1>
           <p className="text-sm text-gray-500 mt-1">
-            All generated documents — original and reviewed versions.
+            Final documents are generated automatically in the background after submission.
           </p>
         </div>
         <button
@@ -165,11 +141,10 @@ export default function DownloadsPage() {
 
       {/* Stats */}
       {!loading && submissions.length > 0 && (
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-2 gap-4">
           {[
             { label: 'Submissions', value: total },
             { label: 'Documents Generated', value: `${completedDocs} / ${totalDocs}` },
-            { label: 'Approved', value: approvedDocs },
           ].map(({ label, value }) => (
             <div key={label} className="rounded-lg border border-gray-200 bg-white p-4 text-center">
               <p className="text-2xl font-bold text-gray-900">{value}</p>
@@ -214,9 +189,18 @@ export default function DownloadsPage() {
                   {new Date(submission.submittedAt || submission.createdAt).toLocaleString()}
                 </p>
               </div>
-              <span className="rounded-full bg-slate-100 px-3 py-0.5 text-xs font-medium text-slate-600">
-                {submission.jobs.length} doc{submission.jobs.length !== 1 ? 's' : ''}
-              </span>
+              <div className="flex items-center gap-2">
+                <span className="rounded-full bg-slate-100 px-3 py-0.5 text-xs font-medium text-slate-600">
+                  {submission.jobs.length} doc{submission.jobs.length !== 1 ? 's' : ''}
+                </span>
+                <button
+                  onClick={() => handleDelete(submission)}
+                  disabled={deleting === submission.id}
+                  className="rounded border border-red-200 px-2 py-0.5 text-xs text-red-600 hover:bg-red-50 disabled:opacity-50"
+                >
+                  {deleting === submission.id ? 'Deleting…' : 'Delete'}
+                </button>
+              </div>
             </div>
 
             {/* Jobs */}

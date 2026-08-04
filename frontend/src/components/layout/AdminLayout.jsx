@@ -8,7 +8,6 @@ const nav = [
   ]},
   { section: 'Customer Simulation', items: [
     { to: '/simulation', label: 'Questionnaire' },
-    { to: '/review', label: 'Review' },
     { to: '/downloads', label: 'Downloads' },
   ]},
 ];

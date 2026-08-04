@@ -139,6 +139,12 @@ export default function SimulationPage() {
           Thank you. Your answers have been validated and the following documents are being prepared:
         </p>
         {submissionId && <GenerationStatus submissionId={submissionId} />}
+        <a
+          href="/downloads"
+          className="mt-6 inline-block rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700"
+        >
+          Open Download Center
+        </a>
       </div>
     );
   }

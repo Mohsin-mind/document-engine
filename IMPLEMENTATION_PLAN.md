@@ -111,13 +111,13 @@ Priority legend:
 **Goal:** prove docxtemplater + LibreOffice work with real lawyer-authored DOCX.
 
 Tasks:
-- [ ] Acquire 1–3 real DOCX templates (lawyer-authored)
-- [ ] Render placeholders, loops, conditions with docxtemplater + PizZip
-- [ ] Handle Word run fragmentation (multi-run placeholders)
-- [ ] Convert DOCX → PDF with soffice headless; compare visually with MS Word
-- [ ] Verify fonts, numbering, page breaks, headers/footers survive
-- [ ] Test large template + repeatable sections (e.g., 20 beneficiaries)
-- [ ] Write findings into `docs/POC_RESULTS.md`
+- [x] Acquire 1–3 real DOCX templates (lawyer-authored)
+- [x] Render placeholders, loops, conditions with docxtemplater + PizZip
+- [x] Handle Word run fragmentation (multi-run placeholders)
+- [x] Convert DOCX → PDF with soffice headless; compare visually with MS Word
+- [x] Verify fonts, numbering, page breaks, headers/footers survive
+- [x] Test large template + repeatable sections (e.g., 20 beneficiaries)
+- [x] Write findings into `docs/POC_RESULTS.md`
 
 **Exit criteria:** all render correctly → proceed. Any blocker → stop and reassess.
 
@@ -125,25 +125,25 @@ Tasks:
 
 ### Phase 1 — Foundation · [P0]
 
-- [ ] P0 Monorepo scaffold: npm workspaces (backend + frontend), Express API, Vite app (no Docker — all services run locally)
-- [ ] P0 Sequelize models (tables above) + seed script + migrations
-- [ ] P0 `StorageService` interface + disk provider (`storage/` folder)
-- [ ] P0 BullMQ connections + job-name constants + worker stubs
-- [ ] P0 Basic admin shell UI (layout + routing: Admin Mode / Customer Simulation)
-- [ ] P1 Error handling middleware + structured logging
-- [ ] P1 Health endpoints (`/health`, Redis/DB checks)
+- [x] P0 Monorepo scaffold: npm workspaces (backend + frontend), Express API, Vite app (no Docker — all services run locally)
+- [x] P0 Sequelize models (tables above) + seed script + migrations
+- [x] P0 `StorageService` interface + disk provider (`storage/` folder)
+- [x] P0 BullMQ connections + job-name constants + worker stubs
+- [x] P0 Basic admin shell UI (layout + routing: Admin Mode / Customer Simulation)
+- [x] P1 Error handling middleware + structured logging
+- [x] P1 Health endpoints (`/health`, Redis/DB checks)
 
 ---
 
 ### Phase 2 — Question Management (Admin) · [P0]
 
-- [ ] P0 CRUD for question sets with **draft/published versions**
-- [ ] P0 Question types: text, number, date, dropdown, yes/no, checkbox
-- [ ] P0 Conditional questions (JSONB rules like `when: {field, equals, value}`)
-- [ ] P0 Repeatable groups (children, assets, beneficiaries)
-- [ ] P0 Validation rules (required, min/max, regex, date ranges)
-- [ ] P0 Publish flow: version snapshot, immutable after publish
-- [ ] P1 Copy-from-published (edit creates new draft from latest published)
+- [x] P0 CRUD for question sets with **draft/published versions**
+- [x] P0 Question types: text, number, date, dropdown, yes/no, checkbox
+- [x] P0 Conditional questions (JSONB rules like `when: {field, equals, value}`)
+- [x] P0 Repeatable groups (children, assets, beneficiaries)
+- [x] P0 Validation rules (required, min/max, regex, date ranges)
+- [x] P0 Publish flow: version snapshot, immutable after publish
+- [x] P1 Copy-from-published (edit creates new draft from latest published)
 - [ ] P2 Question-set preview in admin UI
 
 **Output:** published `question_set_version` + `definition` JSONB.
@@ -220,13 +220,13 @@ Raw answers → validate → rule engine → canonical JSON → per-document ren
 
 ### Phase 7 — Generation Queue · [P0]
 
-- [ ] P0 Enqueue **one BullMQ job per document** (Will, Trust, POA…)
-- [ ] P0 `docx-worker`: docxtemplater render → artifact stored
-- [ ] P0 `pdf-worker`: soffice conversion (isolated pool, concurrency 2–4)
-- [ ] P0 Job status + progress updates (`generation_jobs`, SSE to frontend)
-- [ ] P0 Retries + timeouts + error logging per job
-- [ ] P1 Concurrency controls per queue (BulMQ limiter)
-- [ ] P1 Graceful shutdown / dead-letter queue
+- [x] P0 Enqueue **one BullMQ job per document** (Will, Trust, POA…)
+- [x] P0 `docx-worker`: docxtemplater render → artifact stored
+- [x] P0 `pdf-worker`: soffice conversion (isolated pool, concurrency 2–4)
+- [x] P0 Job status + progress updates (`generation_jobs`, SSE to frontend)
+- [x] P0 Retries + timeouts + error logging per job
+- [x] P1 Concurrency controls per queue (BulMQ limiter)
+- [x] P1 Graceful shutdown / dead-letter queue
 - [ ] P2 Job metrics (BullMQ dashboard integration)
 
 **Only heavy ops are queued** — nothing else blocks the web process.
@@ -235,10 +235,12 @@ Raw answers → validate → rule engine → canonical JSON → per-document ren
 
 ### Phase 8 — Review Workflow + Download Center · [P1]
 
-- [ ] P1 Review list: generated DOCX per job with status
-- [ ] P1 Review in admin → upload reviewed DOCX → generate reviewed PDF
-- [ ] P1 Approve (reviewed versions stored as **new artifacts**, never overwrite)
-- [ ] P1 Download center: DOCX + PDF per artifact, generation status
+> **Flow note:** the customer flow needs **no admin intervention** — on submit, background workers generate the final DOCX + PDF, which appear directly in the Download Center. The review workflow below is kept as optional admin tooling (dormant API, no UI) for future "lawyer review" needs.
+
+- [x] P1 Download center: DOCX + PDF per artifact, generation status (automatic, no review gate)
+- [x] P1 Review list: generated DOCX per job with status (API only)
+- [x] P1 Review in admin → upload reviewed DOCX → generate reviewed PDF (API only)
+- [x] P1 Approve (reviewed versions stored as **new artifacts**, never overwrite) (API only)
 - [ ] P1 Audit history (job events, review events, timestamps)
 
 ---

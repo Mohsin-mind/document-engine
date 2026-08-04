@@ -22,4 +22,8 @@ const submit = asyncHandler(async (req, res) => {
   res.json({ data: await service.submit(req.params.id) });
 });
 
-module.exports = { questionnaire, create, getById, update, submit };
+const remove = asyncHandler(async (req, res) => {
+  res.json({ data: await service.deleteSubmission(req.params.id) });
+});
+
+module.exports = { questionnaire, create, getById, update, submit, remove };

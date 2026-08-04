@@ -7,7 +7,6 @@ import RulesEditorPage from './pages/admin/rules/RulesEditorPage.jsx';
 import TemplatesPage from './pages/admin/templates/TemplatesPage.jsx';
 import TemplateEditorPage from './pages/admin/templates/TemplateEditorPage.jsx';
 import SimulationPage from './pages/simulation/SimulationPage.jsx';
-import ReviewPage from './pages/review/ReviewPage.jsx';
 import DownloadsPage from './pages/downloads/DownloadsPage.jsx';
 
 export default function App() {
@@ -21,7 +20,6 @@ export default function App() {
         <Route path="/admin/templates" element={<TemplatesPage />} />
         <Route path="/admin/templates/:id" element={<TemplateEditorPage />} />
         <Route path="/simulation" element={<SimulationPage />} />
-        <Route path="/review" element={<ReviewPage />} />
         <Route path="/downloads" element={<DownloadsPage />} />
         <Route path="*" element={<Navigate to="/simulation" replace />} />
       </Route>

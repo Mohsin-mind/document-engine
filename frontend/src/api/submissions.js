@@ -19,3 +19,4 @@ export const createSubmission = (answers) => request(`${API}/submissions`, { met
 export const getSubmission = (id) => request(`${API}/submissions/${id}`);
 export const saveSubmission = (id, answers) => request(`${API}/submissions/${id}`, { method: 'PUT', body: JSON.stringify({ answers }) });
 export const submitSubmission = (id) => request(`${API}/submissions/${id}/submit`, { method: 'POST' });
+export const deleteSubmission = (id) => request(`${API}/submissions/${id}`, { method: 'DELETE' });

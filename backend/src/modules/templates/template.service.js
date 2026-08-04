@@ -1,9 +1,11 @@
+const PizZip = require('pizzip');
+const { randomUUID } = require('crypto');
 const { Template, TemplateVersion, DocumentDefinition } = require('../../db');
 const { NotFoundError, ValidationError, ConflictError } = require('../../common/errors');
 const { getStorage } = require('../../common/storage');
 const { extractVariables } = require('./extract.service');
 const { prepareDocxForRender } = require('./docx.prepare');
-const { validateMappings, buildRenderContext } = require('./render.context');
+const { validateMappings, buildRenderContext, mappingsFromVariables } = require('./render.context');
 const { renderDocx, convertToPdf } = require('../../../workers/render.service');
 
 function toTemplateDto(t) {
@@ -43,7 +45,6 @@ function toDefinitionDto(d) {
     templateVersionId: d.templateVersionId,
     questionSetId: d.questionSetId,
     name: d.name,
-    mappings: d.mappings,
     status: d.status,
     publishedAt: d.publishedAt,
   };
@@ -92,7 +93,12 @@ async function createTemplate({ name, description, questionSetId, file }) {
   if (!/\.docx$/i.test(file.originalname)) throw new ValidationError('Only .docx files are supported');
 
   const prepared = prepareDocxForRender(file.buffer);
-  const extractedVariables = extractVariables(prepared);
+  const extractedVariables = extractVariables(prepared).map((v) => ({
+    id: randomUUID(),
+    name: v.name,
+    type: v.type,
+    jsonPath: null,
+  }));
   const template = await Template.create({
     name: name.trim(),
     description: description || null,
@@ -115,7 +121,6 @@ async function createTemplate({ name, description, questionSetId, file }) {
     templateVersionId: version.id,
     questionSetId: questionSetId || null,
     name: template.name,
-    mappings: {},
     status: 'draft',
   });
   return getVersion(template.id, version.id);
@@ -132,16 +137,36 @@ async function saveMappings(templateId, versionId, { mappings, sampleCanonical }
   const normalized = Array.isArray(mappings)
     ? mappings
     : Object.entries(mappings || {}).map(([docxTag, canonicalPath]) => ({ docxTag, canonicalPath }));
+  if (normalized.length === 0) {
+    throw new ValidationError('At least one mapping is required');
+  }
   const check = validateMappings(sampleCanonical, normalized);
   if (!check.valid) {
     throw new ValidationError('Mapping validation failed', check.errors.map((e) => `${e.tag}: ${e.message}`));
   }
 
-  const definition = await DocumentDefinition.findOne({ where: { templateVersionId: version.id } });
-  if (!definition) throw new NotFoundError('Document definition not found');
-  await definition.update({ mappings: Object.fromEntries(check.entries.map((e) => [e.docxTag, e.canonicalPath])) });
-  await TemplateVersion.update({ mappingStatus: 'mapped-validated' }, { where: { id: version.id } });
-  return getVersion(templateId, versionId);
+  const versionRow = await TemplateVersion.findByPk(version.id);
+  if (!versionRow) throw new NotFoundError('Template version not found');
+  const byTag = new Map(check.entries.map((e) => [e.docxTag, e.canonicalPath]));
+  const known = new Set((versionRow.extractedVariables || []).map((v) => v.name));
+  const unknown = check.entries.filter((e) => !known.has(e.docxTag));
+  if (unknown.length > 0) {
+    throw new ValidationError('Mapping validation failed', unknown.map((e) => `${e.docxTag}: tag not found in template`));
+  }
+  const missing = (versionRow.extractedVariables || []).filter((v) => !byTag.has(v.name));
+  if (missing.length > 0) {
+    throw new ValidationError(
+      'Mapping validation failed',
+      missing.map((v) => `${v.name}: no mapping provided`)
+    );
+  }
+  const extractedVariables = (versionRow.extractedVariables || []).map((v) => ({
+    ...v,
+    jsonPath: byTag.has(v.name) ? byTag.get(v.name) : null,
+  }));
+  await versionRow.update({ extractedVariables, mappingStatus: 'mapped-validated' });
+  const saved = await getVersion(templateId, versionId);
+  return { ...saved, validation: check.results };
 }
 
 async function runRenderTest(templateId, versionId, { sampleCanonical }) {
@@ -152,23 +177,36 @@ async function runRenderTest(templateId, versionId, { sampleCanonical }) {
   if (!sampleCanonical || typeof sampleCanonical !== 'object') {
     throw new ValidationError('sampleCanonical is required to run the render test');
   }
-  const definition = await DocumentDefinition.findOne({ where: { templateVersionId: version.id } });
-  if (!definition) throw new NotFoundError('Document definition not found');
-  if (definition.mappings && Object.keys(definition.mappings).length > 0) {
-    const check = validateMappings(sampleCanonical, definition.mappings);
-    if (!check.valid) {
-      throw new ValidationError(
-        'Mapping validation failed against the sample payload',
-        check.errors.map((e) => `${e.tag}: ${e.message}`)
-      );
-    }
+  const versionRow = await TemplateVersion.findByPk(version.id);
+  if (!versionRow) throw new NotFoundError('Template version not found');
+  const mappings = mappingsFromVariables(versionRow.extractedVariables);
+  const missingMappings = (versionRow.extractedVariables || []).filter((v) => !v.jsonPath);
+  if (missingMappings.length > 0) {
+    throw new ValidationError(
+      'Mapping validation failed against the sample payload',
+      missingMappings.map((v) => `${v.name}: no mapping provided`)
+    );
+  }
+  const check = validateMappings(sampleCanonical, mappings);
+  if (!check.valid) {
+    throw new ValidationError(
+      'Mapping validation failed against the sample payload',
+      check.errors.map((e) => `${e.tag}: ${e.message}`)
+    );
   }
 
   const storage = getStorage();
   const source = await storage.read({ key: version.storageKey });
-  const context = buildRenderContext(sampleCanonical, definition.mappings || {});
+  const context = buildRenderContext(sampleCanonical, mappings);
 
   const docxBuffer = renderDocx(source, context);
+  const missing = findMissingMarkers(docxBuffer);
+  if (missing.length > 0) {
+    throw new ValidationError(
+      'Render test failed',
+      missing.map((m) => `Unmapped or missing value: ${m}`)
+    );
+  }
   const testDocxKey = `templates/${templateId}/v${version.versionNo}/test.docx`;
   await storage.save({ key: testDocxKey, data: docxBuffer });
 
@@ -192,6 +230,19 @@ async function runRenderTest(templateId, versionId, { sampleCanonical }) {
     { where: { id: version.id } }
   );
   return getVersion(templateId, versionId);
+}
+
+function findMissingMarkers(docxBuffer) {
+  const zip = new PizZip(docxBuffer);
+  const found = [];
+  for (const file of Object.values(zip.files)) {
+    if (!file.name.endsWith('.xml')) continue;
+    const text = file.asText();
+    const re = /\[MISSING:([^\]]+)\]/g;
+    let m;
+    while ((m = re.exec(text))) found.push(`[MISSING:${m[1]}]`);
+  }
+  return [...new Set(found)];
 }
 
 async function publishTemplate(templateId, versionId) {

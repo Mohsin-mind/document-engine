@@ -8,5 +8,6 @@ router.post('/submissions', ctrl.create);
 router.get('/submissions/:id', ctrl.getById);
 router.put('/submissions/:id', ctrl.update);
 router.post('/submissions/:id/submit', ctrl.submit);
+router.delete('/submissions/:id', ctrl.remove);
 
 module.exports = router;

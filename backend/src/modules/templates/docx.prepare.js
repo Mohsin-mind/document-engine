@@ -23,7 +23,7 @@ function scanTokens(full) {
           kind = 'loop-close';
         }
         if (name && !INVALID_NAME_CHARS.test(name)) {
-          if (ch === '[' && (/\d/.test(name) || !/^[A-Z]/.test(name))) {
+          if (ch === '[' && !/^[A-Z]/.test(name)) {
             i = end + 1;
             continue;
           }
@@ -113,7 +113,7 @@ function prepareDocxForRender(buffer) {
   for (const partName of XML_PART_NAMES) {
     const part = zip.file(partName);
     if (!part) continue;
-    const xml = part.asText();
+    let xml = part.asText().replace(/<w:highlight\b[^>]*\/>/g, '');
     const prepared = xml
       .split('</w:p>')
       .map((p) => (p.includes('<w:r') ? processParagraphXml(p) : p))

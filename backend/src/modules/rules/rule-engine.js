@@ -93,15 +93,13 @@ function evaluate(definition, answers, context = {}) {
   }
 
   const computed = {};
-  const computedValues = {};
   for (const c of definition.computed || []) {
     const raw = c.template !== undefined ? c.template : c.value;
     const resolved = substitute(raw, answers, flags);
-    computedValues[c.key] = resolved;
     setByPath(computed, c.key, resolved);
   }
 
-  const canonical = { flags, computed };
+  const canonical = { flags };
   for (const key of Object.keys(computed)) {
     const top = key.split('.')[0];
     if (canonical[top] === undefined) {

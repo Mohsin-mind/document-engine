@@ -34,6 +34,10 @@ const publish = asyncHandler(async (req, res) => {
   res.json({ data: version });
 });
 
+const generateSample = asyncHandler(async (req, res) => {
+  res.json({ data: await service.generateSampleCanonical(req.params.id) });
+});
+
 const update = asyncHandler(async (req, res) => {
   res.json({ data: await service.updateTemplateMetadata(req.params.id, req.body) });
 });
@@ -42,4 +46,4 @@ const remove = asyncHandler(async (req, res) => {
   res.json({ data: await service.deleteTemplate(req.params.id) });
 });
 
-module.exports = { list, create, getById, saveMappings, runTest, publish, update, remove };
+module.exports = { list, create, getById, saveMappings, runTest, publish, generateSample, update, remove };

@@ -88,7 +88,7 @@ export default function TemplatesPage() {
               return (
                 <tr key={t.id}>
                   <td className="px-4 py-3 text-gray-700">
-                    {t.name}
+                    <span title={t.name}>{t.name}</span>
                     <span className="ml-2 font-mono text-xs text-gray-400">v{v?.versionNo}</span>
                   </td>
                   <td className="px-4 py-3">

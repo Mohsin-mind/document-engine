@@ -5,8 +5,8 @@ import { listRules, createRule, deleteRule } from '../../../api/rules.js';
 import { listQuestionSets } from '../../../api/questions.js';
 
 const emptyDefinition = () => ({
-  flags: [{ key: '', when: { field: '', equals: '' } }],
-  computed: [{ key: '', template: '' }],
+  flags: [],
+  computed: [],
   includeGroups: [],
 });
 

@@ -1,12 +1,13 @@
 const PizZip = require('pizzip');
 const { randomUUID } = require('crypto');
-const { Template, TemplateVersion, DocumentDefinition } = require('../../db');
+const { Template, TemplateVersion, DocumentDefinition, QuestionSetVersion, QuestionSet, Rule } = require('../../db');
 const { NotFoundError, ValidationError, ConflictError } = require('../../common/errors');
 const { getStorage } = require('../../common/storage');
 const { extractVariables } = require('./extract.service');
 const { prepareDocxForRender } = require('./docx.prepare');
 const { validateMappings, buildRenderContext, mappingsFromVariables } = require('./render.context');
 const { renderDocx, convertToPdf } = require('../../../workers/render.service');
+const { evaluate } = require('../rules/rule-engine');
 
 function toTemplateDto(t) {
   return {
@@ -281,6 +282,101 @@ async function publishTemplate(templateId, versionId) {
   return getVersion(templateId, versionId);
 }
 
+function buildSampleAnswers(definition) {
+  const answers = {};
+  for (const section of definition.sections || []) {
+    if (section.repeatable) {
+      answers[section.repeatable.id] = [{}];
+      for (const f of section.repeatable.fields || []) {
+        answers[section.repeatable.id][0][f.id] = sampleValue(f.type, f.options);
+      }
+    }
+    for (const q of section.questions || []) {
+      answers[q.id] = sampleValue(q.type, q.options);
+    }
+  }
+  return answers;
+}
+
+function sampleValue(type, options) {
+  switch (type) {
+    case 'number':
+      return 42;
+    case 'date':
+      return '2026-01-15';
+    case 'dropdown':
+      return options && options[0] ? options[0].value ?? options[0] : 'Option 1';
+    case 'yesno':
+      return 'yes';
+    case 'checkbox':
+      return true;
+    default:
+      return 'Sample value';
+  }
+}
+
+function flattenPaths(value, prefix, out) {
+  if (Array.isArray(value)) {
+    const arrPath = prefix ? `${prefix}[]` : '[]';
+    out.push(arrPath);
+    if (value.length > 0 && value[0] && typeof value[0] === 'object') {
+      flattenPaths(value[0], arrPath, out);
+    }
+    return out;
+  }
+  if (value && typeof value === 'object') {
+    for (const [k, v] of Object.entries(value)) {
+      flattenPaths(v, prefix ? `${prefix}.${k}` : k, out);
+    }
+    return out;
+  }
+  out.push(prefix);
+  return out;
+}
+
+async function generateSampleCanonical(templateId) {
+  const template = await Template.findByPk(templateId);
+  if (!template) throw new NotFoundError('Template not found');
+  const versions = await TemplateVersion.findAll({
+    where: { templateId },
+    order: [['versionNo', 'DESC']],
+  });
+  const definition = await DocumentDefinition.findOne({
+    where: { templateVersionId: versions[0].id },
+  });
+  if (!definition || !definition.questionSetId) {
+    throw new ValidationError('Template is not bound to a question set — bind one before generating a sample');
+  }
+  const questionSetVersion = await QuestionSetVersion.findOne({
+    where: { questionSetId: definition.questionSetId, status: 'published' },
+    order: [['versionNo', 'DESC']],
+  });
+  if (!questionSetVersion) {
+    throw new ValidationError('The bound question set has no published version');
+  }
+  const rule = await Rule.findOne({
+    where: { questionSetId: definition.questionSetId, status: 'published' },
+    order: [['versionNo', 'DESC']],
+  });
+  if (!rule) {
+    throw new ValidationError('The bound question set has no published rule');
+  }
+  const answers = buildSampleAnswers(questionSetVersion.definition);
+  const canonical = evaluate(rule.definition, answers);
+  if (canonical.flags && Object.keys(canonical.flags).length === 0) {
+    delete canonical.flags;
+  }
+  const paths = [...new Set(flattenPaths(canonical, '', []))];
+  const set = await QuestionSet.findByPk(definition.questionSetId);
+  return {
+    canonical,
+    paths,
+    answers,
+    questionSetName: set ? set.name : null,
+    ruleVersionNo: rule.versionNo,
+  };
+}
+
 async function updateTemplateMetadata(id, { name, description, questionSetId }) {
   const template = await Template.findByPk(id);
   if (!template) throw new NotFoundError('Template not found');
@@ -315,6 +411,7 @@ module.exports = {
   saveMappings,
   runRenderTest,
   publishTemplate,
+  generateSampleCanonical,
   updateTemplateMetadata,
   deleteTemplate,
 };

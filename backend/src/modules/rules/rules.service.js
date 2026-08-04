@@ -59,9 +59,13 @@ async function updateDraft(id, { definition }) {
   }
 
   if (rule.status === 'published') {
+    const latest = await Rule.findOne({
+      where: { questionSetId: rule.questionSetId },
+      order: [['versionNo', 'DESC']],
+    });
     const newRule = await Rule.create({
       questionSetId: rule.questionSetId,
-      versionNo: rule.versionNo + 1,
+      versionNo: latest.versionNo + 1,
       status: 'draft',
       definition: definition !== undefined ? definition : rule.definition,
     });

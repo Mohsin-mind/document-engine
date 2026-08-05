@@ -11,6 +11,7 @@ import {
 } from '../../../api/templates.js';
 import { listQuestionSets } from '../../../api/questions.js';
 import PathSelect from './PathSelect.jsx';
+import FieldReference, { flattenValues } from '../../../components/FieldReference.jsx';
 
 const fileUrl = (key) => (key ? `/api/files/${encodeURIComponent(key)}` : null);
 
@@ -91,6 +92,7 @@ export default function TemplateEditorPage() {
   const [savedOk, setSavedOk] = useState(false);
   const [testPassed, setTestPassed] = useState(false);
   const [boundQsId, setBoundQsId] = useState(null);
+  const [sampleJsonOpen, setSampleJsonOpen] = useState(false);
   const [notice, setNotice] = useState('');
   const [error, setError] = useState('');
 
@@ -138,7 +140,9 @@ export default function TemplateEditorPage() {
         const s = suggest(paths, variable.name, variable.type);
         if (s) {
           next[variable.name] = s;
-          setMappings((m) => (m && !m[variable.name] ? { ...m, [variable.name]: s.path } : m));
+          if (s.confidence === 'high') {
+            setMappings((m) => (m && !m[variable.name] ? { ...m, [variable.name]: s.path } : m));
+          }
         }
       }
       setSuggestions(next);
@@ -148,6 +152,15 @@ export default function TemplateEditorPage() {
 
   const variables = useMemo(() => template?.versions[0]?.extractedVariables || [], [template]);
   const v = template?.versions[0];
+
+  const sampleCanonical = useMemo(() => {
+    try {
+      return JSON.parse(sampleText);
+    } catch {
+      return null;
+    }
+  }, [sampleText]);
+  const sampleOk = Boolean(sampleCanonical && typeof sampleCanonical === 'object');
 
   const saveMut = useMutation({
     mutationFn: (vId) => saveMappings(id, vId, { mappings, sampleCanonical: JSON.parse(sampleText) }),
@@ -184,6 +197,7 @@ export default function TemplateEditorPage() {
       setPaths(data.paths || []);
       setGenInfo(data);
       setSampleText(JSON.stringify(data.canonical, null, 2));
+      setSampleJsonOpen(true);
       setNotice(
         data.questionSetName
           ? `Sample generated from "${data.questionSetName}" (rule v${data.ruleVersionNo})`
@@ -215,13 +229,6 @@ export default function TemplateEditorPage() {
   if (!v) return <p className="text-gray-500">No version</p>;
 
   const mappedCount = variables.filter((x) => x.jsonPath || mappings?.[x.name]).length;
-  const sampleOk = (() => {
-    try {
-      return Boolean(JSON.parse(sampleText)) && typeof JSON.parse(sampleText) === 'object';
-    } catch {
-      return false;
-    }
-  })();
   const mappingGate = savedOk || v.mappingStatus === 'mapped-validated';
   const testGate = testPassed || (v.docxTestStatus === 'passed' && v.pdfTestStatus === 'passed');
 
@@ -328,9 +335,9 @@ export default function TemplateEditorPage() {
               </span>
             )}
           </div>
-          <details open={Boolean(sampleText)} className="group">
+          <details open={sampleJsonOpen} onToggle={(e) => setSampleJsonOpen(e.target.open)} className="group">
             <summary className="cursor-pointer text-xs font-medium text-gray-500 hover:text-gray-700">
-              Sample JSON (used for mapping validation + render test — editable)
+              Advanced — sample JSON (rarely needs editing; the tree in step 2 is built from it)
             </summary>
             <textarea
               value={sampleText}
@@ -348,6 +355,22 @@ export default function TemplateEditorPage() {
               Next: mapping →
             </button>
           </div>
+          <FieldReference
+            title="Field reference (canonical paths → sample values)"
+            sections={[
+              {
+                title: 'Canonical payload',
+                rows: sampleCanonical
+                  ? flattenValues(sampleCanonical).map((r) => ({
+                      label: r.path,
+                      id: r.path,
+                      path: r.path,
+                      extra: String(r.value).slice(0, 40),
+                    }))
+                  : [],
+              },
+            ]}
+          />
         </div>
       )}
 
@@ -382,9 +405,10 @@ export default function TemplateEditorPage() {
             </div>
           </div>
           <p className="text-xs text-gray-500">
-            Loops use <span className="font-mono">path[]</span>, item fields use{' '}
-            <span className="font-mono">children[].name</span>. Suggested values are prefilled; per-row ✓ previews
-            appear after Save &amp; validate.
+            Pick a field from the tree — loops are marked{' '}
+            <span className="font-mono">list[]</span>, item fields sit inside them as{' '}
+            <span className="font-mono">list[].name</span>. Each field shows its type and sample value; suggested
+            values are prefilled, per-row ✓ previews appear after Save &amp; validate.
           </p>
           <div className="grid grid-cols-1 gap-2">
             {variables.map((variable) => {
@@ -406,17 +430,23 @@ export default function TemplateEditorPage() {
                       value={path}
                       onChange={(p) => setPath(tag, p, false)}
                       paths={paths}
-                      onEdited={() => setPath(tag, path, false)}
+                      canonical={sampleCanonical}
                     />
-                    {suggestion && (
+                    {suggestion && !path && (
+                      <button
+                        type="button"
+                        onClick={() => setPath(tag, suggestion.path, true)}
+                        title={`Apply suggested mapping: ${suggestion.path}`}
+                        className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium hover:opacity-80 ${CONF_STYLE[suggestion.confidence]}`}
+                      >
+                        Suggest: {suggestion.path} · {suggestion.confidence}
+                      </button>
+                    )}
+                    {suggestion && path && (
                       <span
                         className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium ${CONF_STYLE[suggestion.confidence]}`}
                       >
-                        {suggestion.confidence === 'high'
-                          ? 'High confidence'
-                          : suggestion.confidence === 'medium'
-                            ? 'Medium confidence'
-                            : 'Low confidence'}
+                        {suggestion.confidence} confidence
                       </span>
                     )}
                   </div>

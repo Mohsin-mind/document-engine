@@ -8,6 +8,7 @@ const { prepareDocxForRender } = require('./docx.prepare');
 const { validateMappings, buildRenderContext, mappingsFromVariables } = require('./render.context');
 const { renderDocx, convertToPdf } = require('../../../workers/render.service');
 const { evaluate } = require('../rules/rule-engine');
+const { buildSampleAnswers } = require('../rules/sample.answers');
 
 function toTemplateDto(t) {
   return {
@@ -280,39 +281,6 @@ async function publishTemplate(templateId, versionId) {
     throw err;
   }
   return getVersion(templateId, versionId);
-}
-
-function buildSampleAnswers(definition) {
-  const answers = {};
-  for (const section of definition.sections || []) {
-    if (section.repeatable) {
-      answers[section.repeatable.id] = [{}];
-      for (const f of section.repeatable.fields || []) {
-        answers[section.repeatable.id][0][f.id] = sampleValue(f.type, f.options);
-      }
-    }
-    for (const q of section.questions || []) {
-      answers[q.id] = sampleValue(q.type, q.options);
-    }
-  }
-  return answers;
-}
-
-function sampleValue(type, options) {
-  switch (type) {
-    case 'number':
-      return 42;
-    case 'date':
-      return '2026-01-15';
-    case 'dropdown':
-      return options && options[0] ? options[0].value ?? options[0] : 'Option 1';
-    case 'yesno':
-      return 'yes';
-    case 'checkbox':
-      return true;
-    default:
-      return 'Sample value';
-  }
 }
 
 function flattenPaths(value, prefix, out) {

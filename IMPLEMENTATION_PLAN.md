@@ -253,6 +253,38 @@ Raw answers → validate → rule engine → canonical JSON → per-document ren
 
 ---
 
+### Phase 10 — Admin UX Rethink: Question Sets, Rules & Mapping · [P1]
+
+> **Goal:** the admin screens are functionally complete but "developer-facing" (raw ids, `{answers.*}` DSLs, dotted paths, raw JSON). Non-technical admins must be able to go **blank → published** without typing a single internal id, dotted path, JSON block, or placeholder token. **UI/UX only — the pipeline (question sets → rules → canonical JSON → mappings → generation) is unchanged.** Detailed review: `docs/ADMIN_UX_REVIEW.md`.
+
+Tasks:
+
+**Question Set editor:**
+- [x] P0 Auto-generate + hide question/section/group ids behind an "Advanced" panel (read-only; never the primary input). New rows get `q…` ids on add; existing ids untouched.
+- [x] P0 Conditions built with **pickers** (dropdown of previously defined fields by label + equals value; against that field's options when it's a dropdown/yesno) — no raw id typing.
+- [x] P0 User-friendly type labels + helper text per type (Text / Number / Date / Yes / No / Checkbox).
+- [x] P0 Dropdown options as **per-line rows** (add/remove), not a comma-separated string.
+- [x] P1 Section title is the primary label; id auto + advanced.
+
+**Rules editor:**
+- [x] P0 Flags as **sentence cards** (e.g. "`Spouse included` — true when `Marital status` equals `Married`"), pickers fed from the bound question set; flag `key` auto-slug + advanced override.
+- [x] P0 Computed rows with **@-field insertion** (menu of the bound question set's fields) instead of hand-typed `{answers.<id>}`.
+- [x] P0 `includeGroups` as **checkboxes of group titles**; group maps with pickers on both sides.
+- [x] P0 **"Generate sample from rules"** becomes the primary test path (reuse `generateSampleCanonical`); raw JSON demoted to an Advanced slot.
+
+**Template mapping:**
+- [x] P0 Replace flat PathSelect with a **hierarchical tree** (Zapier-style): collapsible `successorList[] → name`, **type badges** (string/number/date/array) and **inline sample values** per node from the generated canonical.
+- [x] P0 Raw sample JSON demoted to a collapsed **Advanced** section; tree is the default view.
+- [x] P1 Keep + surface existing confidence badges, per-row ✓ previews, loop toolbar (`{#loop}…{/loop}` ↔ `path[]`).
+
+**Cross-cutting:**
+- [x] P2 Small "Show field reference" panel (label → id → canonical path) on all three screens for power users.
+- [x] P2 Plain-language validation messages (`Missing label for question 3` instead of `sections[1].questions[2]: missing label`).
+
+**Exit criteria:** an admin publishes a working document with **zero** typed ids, dotted paths, JSON, or placeholder tokens; every remaining input is a human label, number, option, or auto-generated id.
+
+---
+
 ## 6. Priority Matrix
 
 | Feature | Phase | Priority |
@@ -268,6 +300,7 @@ Raw answers → validate → rule engine → canonical JSON → per-document ren
 | Render/PDF tests + publish gate | 4 | P1 |
 | Review workflow | 8 | P1 |
 | Download center + audit | 8 | P1 |
+| **Admin UX rethink (questions/rules/mapping)** | **10** | **P1** |
 | E-sign schema | 9 | P2 |
 
 **Critical path:** Phase 0 → 1 → 2 → 3 → 5 → 6 → 7 (delivers a working demo).

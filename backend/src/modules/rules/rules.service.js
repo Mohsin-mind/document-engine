@@ -1,6 +1,7 @@
-const { Rule, QuestionSet } = require('../../db');
+const { Rule, QuestionSet, QuestionSetVersion } = require('../../db');
 const { NotFoundError, ValidationError, ConflictError } = require('../../common/errors');
 const { validateRuleDefinition, evaluate } = require('./rule-engine');
+const { buildSampleAnswers } = require('./sample.answers');
 
 function toDto(r) {
   return {
@@ -105,6 +106,28 @@ async function testRule(id, { answers }) {
   return { canonical, answers };
 }
 
+async function generateSample(id) {
+  const rule = await Rule.findByPk(id);
+  if (!rule) throw new NotFoundError('Rule not found');
+  const questionSetVersion = await QuestionSetVersion.findOne({
+    where: { questionSetId: rule.questionSetId },
+    order: [['versionNo', 'DESC']],
+  });
+  if (!questionSetVersion) throw new ValidationError('The rule has no question set version to sample from');
+  const answers = buildSampleAnswers(questionSetVersion.definition);
+  const canonical = evaluate(rule.definition, answers);
+  if (canonical.flags && Object.keys(canonical.flags).length === 0) {
+    delete canonical.flags;
+  }
+  const set = await QuestionSet.findByPk(rule.questionSetId);
+  return {
+    canonical,
+    answers,
+    questionSetName: set ? set.name : null,
+    questionSetVersionNo: questionSetVersion.versionNo,
+  };
+}
+
 module.exports = {
   listRules,
   getRule,
@@ -113,4 +136,5 @@ module.exports = {
   publishRule,
   deleteRule,
   testRule,
+  generateSample,
 };

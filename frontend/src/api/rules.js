@@ -23,4 +23,6 @@ export const updateRule = (id, payload) =>
 export const publishRule = (id) => request(`${BASE}/${id}/publish`, { method: 'POST' });
 export const testRule = (id, answers) =>
   request(`${BASE}/${id}/test`, { method: 'POST', body: JSON.stringify({ answers }) });
+export const generateSampleRule = (id) =>
+  request(`${BASE}/${id}/generate-sample`, { method: 'POST' });
 export const deleteRule = (id) => request(`${BASE}/${id}`, { method: 'DELETE' });

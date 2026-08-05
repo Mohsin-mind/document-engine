@@ -56,28 +56,30 @@ function substitute(text, answers, flags, extra = {}) {
 function validateRuleDefinition(definition) {
   const errors = [];
   if (!definition || typeof definition !== 'object') {
-    return { valid: false, errors: ['definition must be an object'] };
+    return { valid: false, errors: ['The rule definition is missing.'] };
   }
   const flagKeys = new Set();
 
   (definition.flags || []).forEach((f, i) => {
-    if (!f.key) errors.push(`flags[${i}]: missing key`);
-    else if (flagKeys.has(f.key)) errors.push(`flags[${i}]: duplicate key "${f.key}"`);
+    const ref = f.label ? `Flag "${f.label}"` : `Flag ${i + 1}`;
+    if (!f.key) errors.push(`${ref} has no internal key — give it a name.`);
+    else if (flagKeys.has(f.key)) errors.push(`"${f.key}" is used by more than one flag — keys must be unique.`);
     else flagKeys.add(f.key);
-    if (!f.when) errors.push(`flags[${i}]: missing when`);
+    if (!f.when) errors.push(`${ref} has no condition — set one or choose "always true".`);
   });
 
   (definition.computed || []).forEach((c, i) => {
-    if (!c.key) errors.push(`computed[${i}]: missing key`);
-    if (!c.value && !c.template) errors.push(`computed[${i}]: needs value or template`);
+    const ref = c.label ? `Computed "${c.label}"` : `Computed ${i + 1}`;
+    if (!c.key) errors.push(`${ref} has no output name.`);
+    if (!c.value && !c.template) errors.push(`${ref} is empty — enter the sentence it should produce.`);
   });
 
   if (definition.includeGroups && !Array.isArray(definition.includeGroups)) {
-    errors.push('includeGroups must be an array');
+    errors.push('The included lists must be a list.');
   }
 
   if (definition.groupMaps && typeof definition.groupMaps !== 'object') {
-    errors.push('groupMaps must be an object');
+    errors.push('The list item mapping must be a set of fields, not an array.');
   }
 
   return { valid: errors.length === 0, errors };

@@ -36,4 +36,9 @@ const test = asyncHandler(async (req, res) => {
   res.json({ data: result });
 });
 
-module.exports = { list, create, getById, update, publish, remove, test };
+const generateSample = asyncHandler(async (req, res) => {
+  const result = await service.generateSample(req.params.id);
+  res.json({ data: result });
+});
+
+module.exports = { list, create, getById, update, publish, remove, test, generateSample };

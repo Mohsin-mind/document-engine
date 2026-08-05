@@ -1,10 +1,14 @@
-function sampleValue(label, type, options, sectionTitle) {
+const CHILD_NAMES = ['Amy Smith', 'Ben Carter', 'Chloe Nguyen', 'David Okafor'];
+const CHILD_DATES = ['2010-05-01', '2009-11-15', '2008-03-22', '2007-07-08'];
+
+function sampleValue(label, type, options, sectionTitle, index = 0) {
   const l = String(label || '').toLowerCase();
   const sec = String(sectionTitle || '').toLowerCase();
   switch (type) {
     case 'number':
       return 42;
     case 'date':
+      if (l.includes('child') || sec.includes('child')) return CHILD_DATES[index] ?? '2010-05-01';
       return l.includes('birth') ? '1978-04-12' : '2026-08-05';
     case 'dropdown':
       return options && options[0] ? options[0].value ?? options[0] : 'Option 1';
@@ -13,9 +17,18 @@ function sampleValue(label, type, options, sectionTitle) {
     case 'checkbox':
       return true;
     default:
-      if (l.includes('name')) {
-        if (l.includes('successor 2')) return 'Emily Davis';
+      if (l.includes('disinherited')) return 'No one';
+      if (l.includes('trust') && !l.includes('trustee')) return 'The John Smith Living Trust';
+      if (l.includes('state')) return 'Texas';
+      if (l.includes('guardian')) return 'Jane Doe';
+      if (l.includes('charity')) return l.includes('2') ? 'Greenleaf Foundation' : 'Local Humane Society';
+      if (l.includes('beneficiar')) return l.includes('2') ? 'Liam Smith' : 'Olivia Smith';
+      if (l.includes('name') || l.includes('trustee')) {
+        if (l.includes('successor 2') || l.includes('second')) return 'Emily Davis';
         if (l.includes('successor')) return 'Michael Brown';
+        if (l.includes('child')) return CHILD_NAMES[index] ?? 'Amy Smith';
+        if (l.includes('alternate')) return 'Robert Brown';
+        if (sec.includes('spouse') || l.includes('spouse')) return 'Sarah Johnson';
         if (sec.includes('healthcare') || l.includes('agent')) return 'Sarah Johnson';
         return 'John Smith';
       }
@@ -30,10 +43,14 @@ function buildSampleAnswers(definition) {
   const answers = {};
   for (const section of definition.sections || []) {
     if (section.repeatable) {
-      answers[section.repeatable.id] = [{}];
-      for (const f of section.repeatable.fields || []) {
-        answers[section.repeatable.id][0][f.id] = sampleValue(f.label, f.type, f.options, section.title);
-      }
+      const count = /child/i.test(section.title) ? 4 : 1;
+      answers[section.repeatable.id] = Array.from({ length: count }, (_, i) => {
+        const entry = {};
+        for (const f of section.repeatable.fields || []) {
+          entry[f.id] = sampleValue(f.label, f.type, f.options, section.title, i);
+        }
+        return entry;
+      });
     }
     for (const q of section.questions || []) {
       answers[q.id] = sampleValue(q.label, q.type, q.options, section.title);

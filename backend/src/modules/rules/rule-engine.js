@@ -119,7 +119,7 @@ function evaluate(definition, answers, context = {}) {
       for (const [key, template] of Object.entries(itemMap)) {
         mapped[key] = substitute(template, {}, {}, { item });
       }
-      return { ...item, ...mapped };
+      return mapped;
     });
   }
 

@@ -9,7 +9,7 @@ import {
   generateSampleCanonical,
   updateTemplate,
 } from '../../../api/templates.js';
-import { listQuestionSets } from '../../../api/questions.js';
+import { listQuestionSets, getQuestionSet } from '../../../api/questions.js';
 import PathSelect from './PathSelect.jsx';
 import FieldReference, { flattenValues } from '../../../components/FieldReference.jsx';
 
@@ -105,6 +105,23 @@ export default function TemplateEditorPage() {
     queryKey: ['question-sets'],
     queryFn: listQuestionSets,
   });
+
+  const { data: boundQs } = useQuery({
+    queryKey: ['question-set', boundQsId],
+    queryFn: () => getQuestionSet(boundQsId),
+    enabled: Boolean(boundQsId),
+  });
+
+  const rename = useMemo(() => {
+    const def = boundQs?.latestVersion?.definition;
+    const out = {};
+    for (const s of def?.sections || []) {
+      if (s.repeatable) out[s.repeatable.id] = s.title || s.repeatable.label || s.repeatable.id;
+    }
+    return out;
+  }, [boundQs]);
+
+  const displayPath = (p) => p.replace(/^([^.]+)/, (m) => rename[m] || m);
 
   const bindMut = useMutation({
     mutationFn: (questionSetId) => updateTemplate(id, { questionSetId }),
@@ -362,7 +379,7 @@ export default function TemplateEditorPage() {
                 title: 'Canonical payload',
                 rows: sampleCanonical
                   ? flattenValues(sampleCanonical).map((r) => ({
-                      label: r.path,
+                      label: displayPath(r.path),
                       id: r.path,
                       path: r.path,
                       extra: String(r.value).slice(0, 40),
@@ -431,6 +448,7 @@ export default function TemplateEditorPage() {
                       onChange={(p) => setPath(tag, p, false)}
                       paths={paths}
                       canonical={sampleCanonical}
+                      rename={rename}
                     />
                     {suggestion && !path && (
                       <button

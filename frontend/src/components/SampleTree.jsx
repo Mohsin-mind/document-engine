@@ -80,7 +80,7 @@ function Node({ label, value, depth }) {
   return <LeafRow label={label} value={value} depth={depth} />;
 }
 
-export default function SampleTree({ value, title }) {
+export default function SampleTree({ value, title, rename = {} }) {
   if (value == null || typeof value !== 'object') {
     return <p className="text-xs text-gray-400">No sample yet.</p>;
   }
@@ -88,7 +88,7 @@ export default function SampleTree({ value, title }) {
     <div className="rounded-md border border-gray-100 bg-white p-2 max-h-72 overflow-auto">
       {title && <p className="text-[11px] font-semibold text-gray-400 uppercase mb-1">{title}</p>}
       {Object.entries(value).map(([k, v]) => (
-        <Node key={k} label={k} value={v} depth={0} />
+        <Node key={k} label={rename[k] || k} value={v} depth={0} />
       ))}
     </div>
   );

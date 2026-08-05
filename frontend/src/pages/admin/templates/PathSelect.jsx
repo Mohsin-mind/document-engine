@@ -1,37 +1,38 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { valueType, TypeBadge } from '../../../components/SampleTree.jsx';
 
-function toNodes(value, prefix = '') {
+function toNodes(value, prefix = '', rename = {}) {
   if (Array.isArray(value)) {
     const p = prefix ? `${prefix}[]` : '[]';
     const item = value[0];
     const children =
       item && typeof item === 'object'
-        ? Object.entries(item).map(([k, v]) => toNode(k, v, p)).flat()
+        ? Object.entries(item).map(([k, v]) => toNode(k, v, p, rename)).flat()
         : [];
     return [{ key: '[]', path: p, type: 'array', value, children }];
   }
   if (value && typeof value === 'object') {
-    return Object.entries(value).map(([k, v]) => toNode(k, v, prefix)).flat();
+    return Object.entries(value).map(([k, v]) => toNode(k, v, prefix, rename)).flat();
   }
   return [];
 }
 
-function toNode(key, value, prefix) {
+function toNode(key, value, prefix, rename = {}) {
   const path = prefix ? `${prefix}.${key}` : key;
+  const display = prefix ? key : rename[key] || key;
   if (Array.isArray(value)) {
     const arrPath = `${path}[]`;
     const one = value[0];
     const children =
       one && typeof one === 'object'
-        ? Object.entries(one).map(([k, vi]) => toNode(k, vi, arrPath)).flat()
+        ? Object.entries(one).map(([k, vi]) => toNode(k, vi, arrPath, rename)).flat()
         : [];
-    return [{ key: `${key}[]`, path: arrPath, type: 'array', value, children }];
+    return [{ key: `${display}[]`, path: arrPath, type: 'array', value, children }];
   }
   if (value && typeof value === 'object') {
-    return [{ key, path, type: 'object', value, children: toNodes(value, path) }];
+    return [{ key: display, path, type: 'object', value, children: toNodes(value, path, rename) }];
   }
-  return [{ key, path, type: valueType(value), value }];
+  return [{ key: display, path, type: valueType(value), value }];
 }
 
 const valueText = (v) => {
@@ -40,17 +41,41 @@ const valueText = (v) => {
   return String(v);
 };
 
-export default function PathSelect({ value, onChange, paths, canonical }) {
+export default function PathSelect({ value, onChange, paths, canonical, rename = {} }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const wrapRef = useRef(null);
 
+    const renameSegment = (p) => {
+    const m = /^([^.[]+)(\[\])?/.exec(String(p || ''));
+    if (!m) return p;
+    const [, id, brackets] = m;
+    if (!rename[id]) return p;
+    return rename[id] + (brackets || '') + String(p).slice(m[0].length);
+  };
+
+  const reverseRename = useMemo(() => {
+    const r = {};
+    for (const [id, label] of Object.entries(rename)) if (label) r[label] = id;
+    return r;
+  }, [rename]);
+
+  const toRealPath = (p) => {
+    const m = /^([^.[]+)(\[\])?/.exec(String(p || ''));
+    if (!m) return p;
+    const [, label, brackets] = m;
+    if (!reverseRename[label]) return p;
+    return reverseRename[label] + (brackets || '') + String(p).slice(m[0].length);
+  };
+
+  const displayValue = renameSegment(value);
+
   const tree = useMemo(() => {
     if (canonical && typeof canonical === 'object' && !Array.isArray(canonical)) {
-      return toNodes(canonical, '');
+      return toNodes(canonical, '', rename);
     }
-    return paths.map((p) => ({ key: p, path: p, type: 'leaf', value: p, children: [] }));
-  }, [canonical, paths]);
+    return paths.map((p) => ({ key: renameSegment(p), path: p, type: 'leaf', value: p, children: [] }));
+  }, [canonical, paths, rename]);
 
   const selectedPath = String(value || '').replace(/\[\d+\]/g, '[]');
 
@@ -85,6 +110,7 @@ export default function PathSelect({ value, onChange, paths, canonical }) {
     const q = query.toLowerCase();
     if (!q) return true;
     if (node.path.toLowerCase().includes(q)) return true;
+    if (node.key.toLowerCase().includes(q)) return true;
     return (node.children || []).some(matchesQuery);
   };
 
@@ -92,7 +118,7 @@ export default function PathSelect({ value, onChange, paths, canonical }) {
     const out = [];
     for (const node of nodes) {
       if (!matchesQuery(node)) continue;
-      if (query && !node.path.toLowerCase().includes(query.toLowerCase())) {
+      if (query && !node.path.toLowerCase().includes(query.toLowerCase()) && !node.key.toLowerCase().includes(query.toLowerCase())) {
         out.push(renderRows(node.children || [], depth));
         continue;
       }
@@ -131,10 +157,10 @@ export default function PathSelect({ value, onChange, paths, canonical }) {
   return (
     <div className="relative flex-1" ref={wrapRef}>
       <input
-        value={value}
+        value={displayValue}
         title={value || undefined}
         onChange={(e) => {
-          onChange(e.target.value);
+          onChange(toRealPath(e.target.value));
           setOpen(true);
         }}
         onFocus={() => {

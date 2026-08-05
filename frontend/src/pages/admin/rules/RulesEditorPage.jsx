@@ -261,7 +261,7 @@ function ComputedEditor({ computed, fields, flags, onChange, onRemove }) {
           className="rounded border border-indigo-200 bg-indigo-50 px-2 py-1 text-xs text-indigo-700"
         >
           {currentToken && (
-            <option value={currentToken}>{currentLabel} (selected — picking replaces it)</option>
+            <option value={currentToken}>{currentLabel}</option>
           )}
           <option value="">+ Insert answer…</option>
           {fields
@@ -532,7 +532,29 @@ export default function RulesEditorPage() {
           return (
             <div key={groupId} className="rounded-md border border-indigo-100 bg-indigo-50/40 p-3 space-y-2">
               <p className="text-xs font-semibold text-indigo-700">{group ? group.label : groupId} — row fields</p>
-              {Object.entries(maps).map(([key, template]) => (
+              {Object.entries(maps).map(([key, template]) => {
+                const ITEM_TOKEN_RE = /\{item\.[a-z0-9]+\}/g;
+                const currentToken = String(template || '').match(ITEM_TOKEN_RE)?.[0] || '';
+                const currentField = (group?.fields || []).find((f) => `{item.${f.id}}` === currentToken);
+                const currentLabel = currentToken
+                  ? currentField
+                    ? currentField.label
+                    : currentToken
+                  : '';
+                const pick = (token) => {
+                  if (!token) return;
+                  const existing = String(template || '').match(ITEM_TOKEN_RE);
+                  const nextTemplate = existing?.length
+                    ? String(template).replace(existing[0], token)
+                    : `${template || ''}${token}`;
+                  const picked = (group?.fields || []).find((f) => `{item.${f.id}}` === token);
+                  const next = { ...maps };
+                  const nextKey = !key || key === 'field' ? picked?.label || key : key;
+                  delete next[key];
+                  next[nextKey] = nextTemplate;
+                  update(next);
+                };
+                return (
                 <div key={key} className="flex items-center gap-2">
                   <input
                     value={key}
@@ -546,19 +568,18 @@ export default function RulesEditorPage() {
                     className="w-48 rounded border border-gray-300 px-2 py-1 text-xs font-mono"
                   />
                   <span className="text-xs text-gray-500">←</span>
-                  <span className="text-xs text-gray-500">pick a row field:</span>
                   <select
-                    value=""
-                    onChange={(e) => {
-                      if (!e.target.value) return;
-                      update({ ...maps, [key]: e.target.value });
-                    }}
+                    value={currentToken}
+                    onChange={(e) => pick(e.target.value)}
                     className="rounded border border-indigo-200 bg-indigo-50 px-2 py-1 text-xs text-indigo-700"
                   >
+                    {currentToken && <option value={currentToken}>{currentLabel}</option>}
                     <option value="">+ Insert…</option>
-                    {(group?.fields || []).map((f) => (
-                      <option key={f.id} value={`{item.${f.id}}`}>{f.label}</option>
-                    ))}
+                    {(group?.fields || [])
+                      .filter((f) => `{item.${f.id}}` !== currentToken)
+                      .map((f) => (
+                        <option key={f.id} value={`{item.${f.id}}`}>{f.label}</option>
+                      ))}
                   </select>
                   <input
                     value={template}
@@ -577,9 +598,10 @@ export default function RulesEditorPage() {
                     Remove
                   </button>
                 </div>
-              ))}
+                );
+              })}
               <button
-                onClick={() => update({ ...maps, field: '' })}
+                onClick={() => update({ ...maps, '': '' })}
                 className="rounded-md border border-dashed border-indigo-300 px-3 py-1 text-xs text-indigo-600 hover:bg-indigo-50"
               >
                 + Add row field
@@ -666,7 +688,13 @@ export default function RulesEditorPage() {
           )}
         </div>
         {sampleAnswers && <SampleTree value={sampleAnswers} title="Sample answers" />}
-        {canonical && <SampleTree value={canonical} title="Output used by templates" />}
+        {canonical && (
+          <SampleTree
+            value={canonical}
+            title="Output used by templates"
+            rename={Object.fromEntries(qsGroups.map((g) => [g.id, g.label]))}
+          />
+        )}
         <details className="group">
           <summary className="cursor-pointer text-[11px] text-gray-400 hover:text-gray-600">
             Advanced — edit sample JSON manually and run rules

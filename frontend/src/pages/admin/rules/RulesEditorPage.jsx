@@ -55,25 +55,21 @@ function EqualsWidget({ field, value, onChange }) {
 
 function AdvancedKey({ label, value, onChange }) {
   return (
-    <details className="group">
-      <summary className="cursor-pointer text-[11px] text-gray-400 hover:text-gray-600">Advanced</summary>
-      <label className="mt-1 flex items-center gap-2 text-[11px] text-gray-500">
-        <span className="whitespace-nowrap">{label}:</span>
-        <Input
-          size="sm"
-          className="w-64 font-mono text-[11px]"
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-        />
-        <span>Used by templates — leave as-is unless you know it is referenced.</span>
-      </label>
-    </details>
+    <label className="flex items-center gap-2 text-[11px] text-gray-500">
+      <span className="whitespace-nowrap">{label}:</span>
+      <Input
+        size="sm"
+        className="w-64 font-mono text-[11px]"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+      />
+    </label>
   );
 }
 
 function FlagEditor({ flag, fields, groups, onChange, onRemove }) {
   const when = flag.when || {};
-  const kind = when.all ? 'all' : when.group ? 'group' : when.field ? 'field' : 'always';
+  const kind = when.all ? 'all' : when.group ? 'group' : 'field' in when ? 'field' : 'always';
   const label = flag.label || titleCase(flag.key) || '';
 
   const setLabel = (v) => {
@@ -213,22 +209,140 @@ function FlagEditor({ flag, fields, groups, onChange, onRemove }) {
   );
 }
 
-function ComputedEditor({ computed, fields, flags, onChange, onRemove }) {
+const getByPath = (obj, path) =>
+  String(path || '')
+    .split('.')
+    .reduce((cur, p) => (cur == null ? undefined : cur[p]), obj);
+
+const substitute = (text, answers, flagsObj, items = {}) => {
+  let out = String(text || '');
+  out = out.replace(/\{answers\.([^}]+)\}/g, (_, path) => {
+    const v = getByPath(answers, path);
+    return v == null ? '' : String(v);
+  });
+  out = out.replace(/\{flags\.([^}]+)\}/g, (_, path) => {
+    const v = getByPath(flagsObj, path);
+    return v == null ? 'No' : v ? 'Yes' : 'No';
+  });
+  out = out.replace(/\{item\.([^}]+)\}/g, (_, path) => {
+    const v = getByPath(items, path);
+    return v == null ? '' : String(v);
+  });
+  return out;
+};
+
+const evaluateFlag = (when, answers) => {
+  if (!when) return false;
+  if (when.all) return when.all.every((w) => evaluateFlag(w, answers));
+  if (when.any) return when.any.some((w) => evaluateFlag(w, answers));
+  if (when.field !== undefined) {
+    const value = answers[when.field];
+    if (when.equals !== undefined) return value === when.equals;
+    if (when.notEquals !== undefined) return value !== when.notEquals;
+    if (when.in) return when.in.includes(value);
+    return Boolean(value);
+  }
+  if (when.group !== undefined) {
+    const list = Array.isArray(answers[when.group]) ? answers[when.group] : [];
+    if (when.min !== undefined) return list.length >= when.min;
+    if (when.max !== undefined) return list.length <= when.max;
+    return list.length > 0;
+  }
+  return false;
+};
+
+function ComputedEditor({ computed, fields, flags, groups, canonical, answersText, onChange, onRemove }) {
   const label = computed.label || titleCase(computed.key) || '';
-  const TOKEN_RE = /\{answers\.[a-z0-9]+\}|\{flags\.[a-z0-9]+\}/g;
+  const TOKEN_RE = /\{answers\.[a-z0-9]+\}|\{flags\.[a-z0-9]+\}|\{item\.[a-z0-9]+\}/g;
+
+  const evaluatedFlags = useMemo(() => {
+    let answers = {};
+    try { answers = JSON.parse(answersText || '{}'); } catch {}
+    const flagsObj = {};
+    for (const f of flags) {
+      flagsObj[f.key] = evaluateFlag(f.when, answers);
+    }
+    return flagsObj;
+  }, [flags, answersText]);
+
+  const sampleItems = useMemo(() => {
+    const items = {};
+    for (const g of groups) {
+      let list = [];
+      try { list = JSON.parse(answersText || '{}')[g.id] || []; } catch {}
+      if (list.length > 0) items[g.id] = list[0];
+    }
+    return items;
+  }, [groups, answersText]);
+
+  const preview = useMemo(() => {
+    const raw = computed.template ?? computed.value ?? '';
+    if (!raw) return null;
+    try {
+      const answers = JSON.parse(answersText || '{}');
+      return substitute(raw, answers, evaluatedFlags, sampleItems);
+    } catch {
+      return null;
+    }
+  }, [computed.template, computed.value, answersText, evaluatedFlags, sampleItems]);
+
+  const insertOptions = useMemo(() => {
+    const opts = [];
+    if (fields.length) {
+      opts.push({ type: 'group', label: 'Answers' });
+      for (const f of fields) {
+        opts.push({ type: 'option', label: f.label, value: `{answers.${f.id}}`, group: 'Answers' });
+      }
+    }
+    if (flags.length) {
+      opts.push({ type: 'group', label: 'Flags' });
+      for (const f of flags) {
+        opts.push({ type: 'option', label: `flag: ${f.label || f.key}`, value: `{flags.${f.key}}`, group: 'Flags' });
+      }
+    }
+    if (groups.length) {
+      opts.push({ type: 'group', label: 'List items' });
+      for (const g of groups) {
+        for (const f of g.fields) {
+          opts.push({ type: 'option', label: `${g.label} → ${f.label}`, value: `{item.${f.id}}`, group: 'List items' });
+        }
+      }
+    }
+    return opts;
+  }, [fields, flags, groups]);
+
+  const tokenLabelMap = useMemo(() => {
+    const map = {};
+    for (const o of insertOptions) {
+      if (o.type === 'option') map[o.value] = o.label;
+    }
+    return map;
+  }, [insertOptions]);
+
   const insert = (token) => {
     if (!token) return;
     const current = computed.template ?? '';
     const existing = current.match(TOKEN_RE);
-    onChange({
+    const nextTemplate = existing?.length ? current.replace(existing[0], token) : `${current}${token}`;
+    const next = {
       ...computed,
-      template: existing?.length ? current.replace(existing[0], token) : `${current}${token}`,
-    });
+      template: nextTemplate,
+    };
+    const textOnly = String(current || '').replace(TOKEN_RE, '').trim();
+    const isJustToken = textOnly.length === 0;
+    if (isJustToken && tokenLabelMap[token]) {
+      next.label = tokenLabelMap[token];
+      next.key = slugify(tokenLabelMap[token]);
+    }
+    onChange(next);
   };
+
   const currentToken = (computed.template ?? '').match(TOKEN_RE)?.[0] || '';
   const currentMeta = currentToken.startsWith('{answers.')
     ? fields.find((f) => `{answers.${f.id}}` === currentToken)
-    : flags.find((f) => `{flags.${f.key}}` === currentToken);
+    : currentToken.startsWith('{flags.')
+      ? flags.find((f) => `{flags.${f.key}}` === currentToken)
+      : null;
   const currentLabel = currentToken
     ? currentMeta
       ? currentToken.startsWith('{answers.')
@@ -236,21 +350,25 @@ function ComputedEditor({ computed, fields, flags, onChange, onRemove }) {
         : `flag: ${currentMeta.label || currentMeta.key}`
       : currentToken
     : '';
+
   return (
     <div className="rounded-md border border-gray-200 bg-gray-50 p-3 space-y-2">
       <div className="flex flex-wrap items-center gap-2">
-        <Input
-          size="sm"
-          className="w-56"
-          value={label}
-          onChange={(e) => {
-            const next = { ...computed, label: e.target.value };
-            const derivedOld = slugify(label);
-            if (!computed.key || computed.key === derivedOld) next.key = slugify(e.target.value);
-            onChange(next);
-          }}
-          placeholder="Output name (e.g. Executor clause)"
-        />
+        <div className="relative">
+          <Input
+            size="sm"
+            className="w-56"
+            value={label}
+            onChange={(e) => {
+              const next = { ...computed, label: e.target.value };
+              const derivedOld = slugify(label);
+              if (!computed.key || computed.key === derivedOld) next.key = slugify(e.target.value);
+              onChange(next);
+            }}
+            placeholder="Output name (e.g. Executor clause)"
+            title="Human label for this computed value. The internal key is auto-derived and used in templates as {key}."
+          />
+        </div>
         <span className="text-xs text-gray-500">=</span>
         <Input
           size="sm"
@@ -264,25 +382,33 @@ function ComputedEditor({ computed, fields, flags, onChange, onRemove }) {
           onChange={(e) => insert(e.target.value)}
           className="rounded border border-indigo-200 bg-indigo-50 px-2 py-1 text-xs text-indigo-700"
         >
-          {currentToken && (
-            <option value={currentToken}>{currentLabel}</option>
-          )}
-          <option value="">+ Insert answer…</option>
-          {fields
-            .filter((f) => `{answers.${f.id}}` !== currentToken)
-            .map((f) => (
-              <option key={f.id} value={`{answers.${f.id}}`}>{f.label}</option>
-            ))}
-          {flags
-            .filter((f) => `{flags.${f.key}}` !== currentToken)
-            .map((f) => (
-              <option key={f.key} value={`{flags.${f.key}}`}>flag: {f.label || f.key}</option>
-            ))}
+          {currentToken && <option value={currentToken}>{currentLabel}</option>}
+          <option value="">+ Insert field…</option>
+          {['Answers', 'Flags', 'List items'].map((group) => {
+            const items = insertOptions.filter((o) => o.type === 'option' && o.group === group);
+            if (!items.length) return null;
+            return (
+              <optgroup key={group} label={group}>
+                {items.map((item) => (
+                  <option key={item.value} value={item.value}>{item.label}</option>
+                ))}
+              </optgroup>
+            );
+          })}
         </select>
         <Button variant="link" className="text-red-600" onClick={onRemove}>
           Remove
         </Button>
       </div>
+      {preview !== null && (
+        <div className="text-xs text-gray-600 bg-white rounded border border-gray-100 px-2 py-1.5">
+          <span className="text-gray-400 mr-1">Preview:</span>
+          {preview || <span className="text-gray-400 italic">empty</span>}
+        </div>
+      )}
+      {preview === null && answersText && (
+        <p className="text-[11px] text-gray-400">Run "Generate sample submission" above to preview the evaluated sentence.</p>
+      )}
       <AdvancedKey
         label="Internal key"
         value={computed.key || ''}
@@ -432,6 +558,25 @@ export default function RulesEditorPage() {
         </Alert>
       )}
 
+      <div className="flex items-center gap-3">
+        <Button
+          variant="indigo"
+          size="md"
+          onClick={() => {
+            setError('');
+            setNotice('');
+            genSampleMut.mutate();
+          }}
+          disabled={genSampleMut.isPending || !data?.questionSetId}
+          title={data?.questionSetId ? '' : 'Link a question set to generate a sample'}
+        >
+          {genSampleMut.isPending ? 'Generating…' : 'Generate sample'}
+        </Button>
+        {!data?.questionSetId && (
+          <span className="text-xs text-amber-600">Link a question set above, then generate.</span>
+        )}
+      </div>
+
       <div className="rounded-lg border border-gray-200 bg-white p-4 space-y-3">
         <p className="text-sm font-semibold text-gray-700">Flags (true / false facts)</p>
         <p className="text-xs text-gray-500">
@@ -467,6 +612,9 @@ export default function RulesEditorPage() {
             computed={c}
             fields={qsFields}
             flags={definition.flags || []}
+            groups={qsGroups}
+            canonical={canonical}
+            answersText={answersText}
             onChange={(u) => setComputed(definition.computed.map((x, j) => (j === i ? u : x)))}
             onRemove={() => setComputed(definition.computed.filter((_, j) => j !== i))}
           />
@@ -661,7 +809,7 @@ export default function RulesEditorPage() {
 
       <div className="rounded-lg border border-gray-200 bg-white p-4 space-y-3">
         <p className="text-sm font-semibold text-gray-700">Test the rules</p>
-        <div className="flex items-center gap-3">
+      <div className="flex items-center gap-3 mb-4">
           <Button
             variant="indigo"
             onClick={() => {

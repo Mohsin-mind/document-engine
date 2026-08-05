@@ -187,6 +187,8 @@ Tasks:
 - [x] P1 Publish (immutable; rejected if any check fails)
 - [x] P0 `document_definitions`: one questionnaire ↔ multiple templates, each with own mapping
 
+> **Multi-document flow:** A single published questionnaire can be bound to multiple `document_definitions` (e.g., Will, Trust, POA). On customer submit, the backend queries all published definitions for that question set, builds a render payload per document, enqueues one `GenerationJob` per document, and produces independent DOCX + PDF artifacts. The customer sees all generated documents in the Download Center.
+
 **Publish pipeline (gate):** Upload → Extract → Map → Validate → DOCX test → PDF test → Preview → Publish.
 
 ---
@@ -268,7 +270,7 @@ Tasks:
 
 **Rules editor:**
 - [x] P0 Flags as **sentence cards** (e.g. "`Spouse included` — true when `Marital status` equals `Married`"), pickers fed from the bound question set; flag `key` auto-slug + advanced override.
-- [x] P0 Computed rows with **@-field insertion** (menu of the bound question set's fields) instead of hand-typed `{answers.<id>}`.
+- [x] P0 Computed rows with **grouped field insertion** (answers, flags, list item fields) instead of hand-typed `{answers.<id>}`. Includes a **live preview** that evaluates the sentence against sample answers/flags when sample data exists. Prior computed values are not yet chainable (backend `rule-engine.js` does not resolve `{computedKey}` tokens).
 - [x] P0 `includeGroups` as **checkboxes of group titles**; group maps with pickers on both sides.
 - [x] P0 **"Generate sample from rules"** becomes the primary test path (reuse `generateSampleCanonical`); raw JSON demoted to an Advanced slot.
 
@@ -281,7 +283,7 @@ Tasks:
 - [x] P2 Small "Show field reference" panel (label → id → canonical path) on all three screens for power users.
 - [x] P2 Plain-language validation messages (`Missing label for question 3` instead of `sections[1].questions[2]: missing label`).
 
-**Exit criteria:** an admin publishes a working document with **zero** typed ids, dotted paths, JSON, or placeholder tokens; every remaining input is a human label, number, option, or auto-generated id.
+**Exit criteria:** an admin publishes a working document with minimal typed ids, dotted paths, JSON, or placeholder tokens; primary inputs are human labels, dropdown selections, and auto-generated ids. Computed value templates still use `{answers.xxx}`, `{flags.xxx}`, and `{item.xxx}` tokens, but they are inserted via a grouped dropdown with live preview rather than hand-typed.
 
 ---
 

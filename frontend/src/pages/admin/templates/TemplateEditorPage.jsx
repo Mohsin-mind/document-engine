@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { useQuery, useMutation } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   getTemplate,
@@ -8,10 +8,12 @@ import {
   publishTemplate,
   generateSampleCanonical,
   updateTemplate,
+  createDraftVersion,
 } from '../../../api/templates.js';
 import { listQuestionSets, getQuestionSet } from '../../../api/questions.js';
 import PathSelect from './PathSelect.jsx';
 import FieldReference, { flattenValues } from '../../../components/FieldReference.jsx';
+import { PageScaffold, Button, Alert, Badge, Textarea, Loading } from '../../../components/ui';
 
 const fileUrl = (key) => (key ? `/api/files/${encodeURIComponent(key)}` : null);
 
@@ -81,6 +83,7 @@ const CONF_STYLE = {
 export default function TemplateEditorPage() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [step, setStep] = useState(0);
   const [mappings, setMappings] = useState(null);
   const [sampleText, setSampleText] = useState('');
@@ -208,6 +211,18 @@ export default function TemplateEditorPage() {
     onError: (e) => setError(e.message),
   });
 
+  const newVersionMut = useMutation({
+    mutationFn: () => createDraftVersion(id),
+    onSuccess: (version) => {
+      setNotice(`Draft v${version.versionNo} created from published v${v.versionNo} — mappings carried over.`);
+      setStep(0);
+      setSavedOk(false);
+      setTestPassed(false);
+      queryClient.invalidateQueries({ queryKey: ['template', id] });
+    },
+    onError: (e) => setError(e.message),
+  });
+
   const genMut = useMutation({
     mutationFn: () => generateSampleCanonical(id),
     onSuccess: (data) => {
@@ -235,15 +250,15 @@ export default function TemplateEditorPage() {
     }
   };
 
-  if (isLoading || !template) return <p className="text-gray-500">Loading…</p>;
+  if (isLoading || !template) return <Loading />;
   if (isError) {
     return (
-      <div className="rounded-md bg-red-50 border border-red-200 px-4 py-2 text-sm text-red-700">
+      <Alert variant="error">
         Failed to load template: {queryError?.message}
-      </div>
+      </Alert>
     );
   }
-  if (!v) return <p className="text-gray-500">No version</p>;
+  if (!v) return <Loading>No version</Loading>;
 
   const mappedCount = variables.filter((x) => x.jsonPath || mappings?.[x.name]).length;
   const mappingGate = savedOk || v.mappingStatus === 'mapped-validated';
@@ -264,14 +279,11 @@ export default function TemplateEditorPage() {
   };
 
   return (
-    <div className="max-w-5xl space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-xl font-semibold">{template.name}</h2>
-          <p className="text-sm text-gray-500">
-            v{v.versionNo} · {v.status}
-          </p>
-        </div>
+    <PageScaffold
+      containerClassName="max-w-5xl"
+      title={template.name}
+      subtitle={`v${v.versionNo} · ${v.status}`}
+      actions={
         <a
           href={fileUrl(`templates/${template.id}/v${v.versionNo}/source.docx`)}
           download="source.docx"
@@ -279,34 +291,33 @@ export default function TemplateEditorPage() {
         >
           Source DOCX
         </a>
-      </div>
-
-      {error && (
-        <div className="rounded-md bg-red-50 border border-red-200 px-4 py-2 text-sm text-red-700">{error}</div>
-      )}
-      {notice && (
-        <div className="rounded-md bg-green-50 border border-green-200 px-4 py-2 text-sm text-green-700">{notice}</div>
-      )}
-
-      <ol className="flex flex-wrap gap-2">
-        {stepMeta.map((s, i) => (
-          <li key={s.label} className="flex items-center gap-2 text-xs">
-            <button
-              onClick={() => i < step && setStep(i)}
-              className={`rounded-full px-2.5 py-1 ${
-                s.gate
-                  ? 'bg-green-100 text-green-700'
-                  : i === step
-                    ? 'bg-slate-900 text-white'
-                    : 'bg-gray-100 text-gray-500'
-              }`}
-            >
-              {s.label}
-            </button>
-            {i < stepMeta.length - 1 && <span className="text-gray-300">→</span>}
-          </li>
-        ))}
-      </ol>
+      }
+      toolbar={
+        <>
+          {error && <Alert variant="error" className="mb-2">{error}</Alert>}
+          {notice && <Alert variant="success" className="mb-2">{notice}</Alert>}
+          <ol className="flex flex-wrap gap-2">
+            {stepMeta.map((s, i) => (
+              <li key={s.label} className="flex items-center gap-2 text-xs">
+                <button
+                  onClick={() => i < step && setStep(i)}
+                  className={`rounded-full px-2.5 py-1 ${
+                    s.gate
+                      ? 'bg-green-100 text-green-700'
+                      : i === step
+                        ? 'bg-slate-900 text-white'
+                        : 'bg-gray-100 text-gray-500'
+                  }`}
+                >
+                  {s.label}
+                </button>
+                {i < stepMeta.length - 1 && <span className="text-gray-300">→</span>}
+              </li>
+            ))}
+          </ol>
+        </>
+      }
+    >
 
       {step === 0 && (
         <div className="rounded-lg border border-gray-200 bg-white p-4 space-y-3">
@@ -332,17 +343,16 @@ export default function TemplateEditorPage() {
                 ))}
               </select>
             </div>
-            <button
+            <Button
               onClick={() => {
                 setNotice('');
                 genMut.mutate();
               }}
               disabled={!boundQsId || genMut.isPending}
               title={boundQsId ? '' : 'Bind a question set first'}
-              className="rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-50"
             >
               {genMut.isPending ? 'Generating…' : 'Generate sample from rules'}
-            </button>
+            </Button>
             {!boundQsId && (
               <span className="text-xs text-amber-600">Bind a question set above, then generate.</span>
             )}
@@ -356,21 +366,18 @@ export default function TemplateEditorPage() {
             <summary className="cursor-pointer text-xs font-medium text-gray-500 hover:text-gray-700">
               Advanced — sample JSON (rarely needs editing; the tree in step 2 is built from it)
             </summary>
-            <textarea
+            <Textarea
+              size="sm"
+              className="mt-2 w-full font-mono text-xs"
+              rows={10}
               value={sampleText}
               onChange={(e) => setSampleText(e.target.value)}
-              rows={10}
-              className="mt-2 w-full rounded-md border border-gray-300 px-3 py-2 text-xs font-mono"
             />
           </details>
           <div className="flex justify-end">
-            <button
-              onClick={() => sampleOk && setStep(1)}
-              disabled={!sampleOk}
-              className="rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-40"
-            >
+            <Button onClick={() => sampleOk && setStep(1)} disabled={!sampleOk}>
               Next: mapping →
-            </button>
+            </Button>
           </div>
           <FieldReference
             title="Field reference (canonical paths → sample values)"
@@ -404,19 +411,14 @@ export default function TemplateEditorPage() {
               {variables.map((variable) => {
                 const mapped = Boolean(variable.jsonPath || mappings?.[variable.name]);
                 return (
-                  <span
+                  <Badge
                     key={variable.name}
+                    className="font-mono"
+                    tone={variable.type === 'loop' ? 'indigo' : mapped ? 'emerald' : 'gray'}
                     title={variable.type === 'loop' ? `{#${variable.name}}` : `{${variable.name}}`}
-                    className={`rounded-full px-2 py-0.5 text-xs font-mono ${
-                      variable.type === 'loop'
-                        ? 'bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200'
-                        : mapped
-                          ? 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200'
-                          : 'bg-gray-100 text-gray-700'
-                    }`}
                   >
                     {variable.type === 'loop' ? `{#${variable.name}}` : `{${variable.name}}`}
-                  </span>
+                  </Badge>
                 );
               })}
             </div>
@@ -482,30 +484,23 @@ export default function TemplateEditorPage() {
             })}
           </div>
           <div className="flex items-center justify-between">
-            <button
-              onClick={() => setStep(0)}
-              className="rounded-md border border-gray-300 px-4 py-2 text-sm text-gray-600 hover:bg-gray-50"
-            >
+            <Button variant="outline" onClick={() => setStep(0)}>
               ← Back
-            </button>
+            </Button>
             <div className="flex gap-2">
-              <button
+              <Button
+                variant="indigo"
                 onClick={() => {
                   setNotice('');
                   if (parseSample()) saveMut.mutate(v.id);
                 }}
                 disabled={saveMut.isPending}
-                className="rounded-md bg-indigo-700 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-600 disabled:opacity-50"
               >
                 {saveMut.isPending ? 'Validating…' : 'Save & validate mappings'}
-              </button>
-              <button
-                onClick={() => setStep(2)}
-                disabled={!mappingGate}
-                className="rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-40"
-              >
+              </Button>
+              <Button onClick={() => setStep(2)} disabled={!mappingGate}>
                 Next: render test →
-              </button>
+              </Button>
             </div>
           </div>
         </div>
@@ -519,22 +514,22 @@ export default function TemplateEditorPage() {
             loops, bad template syntax and LibreOffice conversion failures.
           </p>
           <div className="flex items-center gap-3">
-            <button
+            <Button
+              variant="indigo"
               onClick={() => {
                 setNotice('');
                 if (parseSample()) testMut.mutate(v.id);
               }}
               disabled={testMut.isPending}
-              className="rounded-md bg-indigo-700 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-600 disabled:opacity-50"
             >
               {testMut.isPending ? 'Rendering + converting…' : 'Run render test'}
-            </button>
+            </Button>
             {(testGate || v.docxTestStatus === 'passed') && (
-              <Badge ok="DOCX passed" />
+              <Badge tone="green">DOCX passed</Badge>
             )}
-            {(testGate || v.pdfTestStatus === 'passed') && <Badge ok="PDF passed" />}
-            {v.docxTestStatus === 'failed' && <Badge bad="DOCX failed" />}
-            {v.pdfTestStatus === 'failed' && <Badge bad="PDF failed" />}
+            {(testGate || v.pdfTestStatus === 'passed') && <Badge tone="green">PDF passed</Badge>}
+            {v.docxTestStatus === 'failed' && <Badge tone="red">DOCX failed</Badge>}
+            {v.pdfTestStatus === 'failed' && <Badge tone="red">PDF failed</Badge>}
           </div>
           {(v.testDocxKey || testGate) && (
             <div className="flex gap-3">
@@ -557,19 +552,12 @@ export default function TemplateEditorPage() {
             </div>
           )}
           <div className="flex items-center justify-between">
-            <button
-              onClick={() => setStep(1)}
-              className="rounded-md border border-gray-300 px-4 py-2 text-sm text-gray-600 hover:bg-gray-50"
-            >
+            <Button variant="outline" onClick={() => setStep(1)}>
               ← Back
-            </button>
-            <button
-              onClick={() => setStep(3)}
-              disabled={!testGate}
-              className="rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-40"
-            >
+            </Button>
+            <Button onClick={() => setStep(3)} disabled={!testGate}>
               Next: publish →
-            </button>
+            </Button>
           </div>
         </div>
       )}
@@ -585,39 +573,34 @@ export default function TemplateEditorPage() {
             <Gate label="DOCX render test passed" ok={testGate || v.docxTestStatus === 'passed'} />
             <Gate label="PDF conversion test passed" ok={testGate || v.pdfTestStatus === 'passed'} />
           </ul>
-          <div className="flex items-center justify-between">
-            <button
-              onClick={() => setStep(2)}
-              className="rounded-md border border-gray-300 px-4 py-2 text-sm text-gray-600 hover:bg-gray-50"
+          {v.status === 'published' && (
+            <Button
+              variant="outlineIndigo"
+              onClick={() => newVersionMut.mutate()}
+              disabled={newVersionMut.isPending}
             >
+              {newVersionMut.isPending ? 'Creating…' : 'New draft from published (v' + v.versionNo + ')'}
+            </Button>
+          )}
+          <div className="flex items-center justify-between">
+            <Button variant="outline" onClick={() => setStep(2)}>
               ← Back
-            </button>
-            <button
+            </Button>
+            <Button
+              variant="success"
+              size="lg"
               onClick={() => {
                 setNotice('');
                 publishMut.mutate(v.id);
               }}
               disabled={publishMut.isPending || v.status === 'published' || !testGate}
-              className="rounded-md bg-green-700 px-5 py-2 text-sm font-medium text-white hover:bg-green-600 disabled:opacity-40"
             >
               {v.status === 'published' ? 'Published' : publishMut.isPending ? 'Publishing…' : 'Publish template'}
-            </button>
+            </Button>
           </div>
         </div>
       )}
-    </div>
-  );
-}
-
-function Badge({ ok, bad }) {
-  return (
-    <span
-      className={`rounded-full px-2.5 py-1 text-xs font-medium ${
-        bad ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'
-      }`}
-    >
-      {ok || bad}
-    </span>
+    </PageScaffold>
   );
 }
 

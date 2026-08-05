@@ -14,8 +14,8 @@ const nav = [
 
 export default function AdminLayout() {
   return (
-    <div className="flex min-h-screen bg-gray-100">
-      <aside className="w-64 shrink-0 bg-slate-900 text-slate-100 flex flex-col">
+    <div className="flex h-screen overflow-hidden bg-gray-100">
+      <aside className="w-64 shrink-0 bg-slate-900 text-slate-100 flex flex-col overflow-y-auto">
         <div className="px-5 py-4 border-b border-slate-700">
           <h1 className="font-bold text-lg">Document Engine</h1>
           <p className="text-xs text-slate-400">Legal Document Platform</p>
@@ -47,7 +47,7 @@ export default function AdminLayout() {
           ))}
         </nav>
       </aside>
-      <main className="flex-1 p-8 overflow-auto">
+      <main className="flex-1 p-8 overflow-y-auto">
         <Outlet />
       </main>
     </div>

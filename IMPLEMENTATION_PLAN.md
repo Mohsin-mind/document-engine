@@ -285,6 +285,38 @@ Tasks:
 
 ---
 
+### Phase 11 — Production-Hardening Review (post-demo) · [P1/P2]
+
+> **Origin:** review of the demo wiring (one questionnaire → two documents, canonical ids in UI, immutable published versions). The flow is correct; the items below fix the workarounds we had to introduce so they become proper product behaviour. **Rule of thumb going forward: the canonical JSON and template mappings should be the stable, human-readable contract between rule authors and document designers — never raw internal ids.**
+
+Tasks:
+
+**Semantic keys for repeatable groups (kill the id/rename hack):**
+- [ ] P1 Give each repeatable group an optional `key` (auto-slug, adjustable) in the question-set definition — the same way flags/computed already have `key` (`approved UI pattern`).
+- [ ] P1 Rule `includeGroups`/`groupMaps` continue to reference groups by their `key`; `evaluate` emits the canonical list under the **key** (falling back to the raw id for existing sets).
+- [ ] P1 Canonical paths become readable and stable: `children[].Child Full Name` instead of `q8q1k39[].Child Full Name`.
+- [ ] P1 Remove the frontend rename/display maps (`PathSelect.jsx`, `TemplateEditorPage.jsx`, `SampleTree.jsx`) once keys are stored — no more display-only translation.
+- [ ] P1 Backfill demo data: add `key: "children"` to the Estate Planning questionnaire and re-map the IRLT template to `children[]` via the new-version flow (below).
+
+**Template versioning gap (found during demo):**
+- [x] P1 Add "create draft v2 from published" — a version-clone endpoint (`POST /templates/:id/versions`) that copies the published storage key + extracted variables into a new draft row; no closed-by-design dead end for editing a published template.
+- [x] P1 UI button "New version from published" on the published template editor; old version stays immutable.
+
+**Explicit questionnaire binding (remove "most recent wins"):**
+- [ ] P2 `getPublishedQuestionnaire` (submission.service.js:22) selects **one** newest published set implicitly. Add an explicit `questionnaire selection` (query param, stored on the submission) when more than one published questionnaire is intended to coexist.
+- [ ] P2 Document the "one active questionnaire" model formally for the single-product demo.
+
+**Data hygiene:**
+- [ ] P1 Cleanup/unpublish orphaned single-document question sets + rules (Healthcare Directive `aa890acd…`, IRLT `62104561…`) once the merged questionnaire is the only active one (they are no longer bound to any template definition).
+- [ ] P2 Add an `unpublish` action for question sets/rules/templates (currently only publish exists).
+
+**Scope/sample hardening:**
+- [ ] P2 Replace `sample.answers.js` label heuristics with explicit per-question fixtures so sample values never silently regress.
+
+**Exit criteria:** a reviewer maps a new template against canonical keys like `children[].Child Full Name` with zero raw ids anywhere; a published template can be re-mapped via the new-version flow without recreating it; the admin UI shows human labels in every dropdown and selection (no rename shims).
+
+---
+
 ## 6. Priority Matrix
 
 | Feature | Phase | Priority |

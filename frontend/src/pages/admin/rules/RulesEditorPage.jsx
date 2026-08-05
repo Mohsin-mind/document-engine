@@ -5,6 +5,7 @@ import { getRule, updateRule, publishRule, testRule, generateSampleRule } from '
 import { getQuestionSet } from '../../../api/questions.js';
 import SampleTree from '../../../components/SampleTree.jsx';
 import FieldReference from '../../../components/FieldReference.jsx';
+import { PageScaffold, Button, Alert, StatusBadge, Input, Select, Textarea, Loading } from '../../../components/ui';
 
 const slugify = (label) =>
   String(label || '')
@@ -24,37 +25,30 @@ const titleCase = (s) =>
 function EqualsWidget({ field, value, onChange }) {
   if (field?.type === 'dropdown') {
     return (
-      <select
-        value={value ?? ''}
-        onChange={(e) => onChange(e.target.value)}
-        className="rounded border border-gray-300 px-2 py-1 text-xs"
-      >
+      <Select size="sm" value={value ?? ''} onChange={(e) => onChange(e.target.value)}>
         <option value="">— choose one —</option>
         {(field.options || []).map((o) => (
           <option key={o} value={o}>{o}</option>
         ))}
-      </select>
+      </Select>
     );
   }
   if (field?.type === 'yesno') {
     return (
-      <select
-        value={value ?? ''}
-        onChange={(e) => onChange(e.target.value)}
-        className="rounded border border-gray-300 px-2 py-1 text-xs"
-      >
+      <Select size="sm" value={value ?? ''} onChange={(e) => onChange(e.target.value)}>
         <option value="">— choose one —</option>
         <option value="yes">Yes</option>
         <option value="no">No</option>
-      </select>
+      </Select>
     );
   }
   return (
-    <input
+    <Input
+      size="sm"
+      className="w-36"
       placeholder="value"
       value={value ?? ''}
       onChange={(e) => onChange(e.target.value)}
-      className="w-36 rounded border border-gray-300 px-2 py-1 text-xs"
     />
   );
 }
@@ -65,10 +59,11 @@ function AdvancedKey({ label, value, onChange }) {
       <summary className="cursor-pointer text-[11px] text-gray-400 hover:text-gray-600">Advanced</summary>
       <label className="mt-1 flex items-center gap-2 text-[11px] text-gray-500">
         <span className="whitespace-nowrap">{label}:</span>
-        <input
+        <Input
+          size="sm"
+          className="w-64 font-mono text-[11px]"
           value={value}
           onChange={(e) => onChange(e.target.value)}
-          className="w-64 rounded border border-gray-300 px-2 py-1 font-mono text-[11px]"
         />
         <span>Used by templates — leave as-is unless you know it is referenced.</span>
       </label>
@@ -92,14 +87,16 @@ function FlagEditor({ flag, fields, groups, onChange, onRemove }) {
   return (
     <div className="rounded-md border border-gray-200 bg-gray-50 p-3 space-y-2">
       <div className="flex flex-wrap items-center gap-2">
-        <input
+        <Input
+          size="sm"
+          className="w-56"
           value={label}
           onChange={(e) => setLabel(e.target.value)}
           placeholder="Flag name (e.g. Spouse included)"
-          className="w-56 rounded border border-gray-300 px-2 py-1 text-xs"
         />
         <span className="text-xs text-gray-500">is true when</span>
-        <select
+        <Select
+          size="sm"
           value={kind}
           onChange={(e) => {
             const k = e.target.value;
@@ -108,25 +105,25 @@ function FlagEditor({ flag, fields, groups, onChange, onRemove }) {
             if (k === 'group') setWhen({ group: '', min: 1 });
             if (k === 'all') setWhen({ all: [{ field: '', equals: '' }] });
           }}
-          className="rounded border border-gray-300 px-2 py-1 text-xs"
         >
           <option value="field">an answer equals</option>
           <option value="group">a list has at least</option>
           <option value="always">always (no condition)</option>
           <option value="all">all of these answers match</option>
-        </select>
+        </Select>
         {kind === 'field' && (
           <>
-            <select
+            <Select
+              size="sm"
+              className="w-52"
               value={when.field || ''}
               onChange={(e) => setWhen({ ...when, field: e.target.value, equals: when.equals ?? '' })}
-              className="w-52 rounded border border-gray-300 px-2 py-1 text-xs"
             >
               <option value="">— choose an answer —</option>
               {fields.map((f) => (
                 <option key={f.id} value={f.id}>{f.label}</option>
               ))}
-            </select>
+            </Select>
             <EqualsWidget
               field={fields.find((f) => f.id === when.field)}
               value={when.equals}
@@ -136,21 +133,23 @@ function FlagEditor({ flag, fields, groups, onChange, onRemove }) {
         )}
         {kind === 'group' && (
           <>
-            <select
+            <Select
+              size="sm"
+              className="w-52"
               value={when.group || ''}
               onChange={(e) => setWhen({ ...when, group: e.target.value })}
-              className="w-52 rounded border border-gray-300 px-2 py-1 text-xs"
             >
               <option value="">— choose a list —</option>
               {groups.map((g) => (
                 <option key={g.id} value={g.id}>{g.label}</option>
               ))}
-            </select>
-            <input
+            </Select>
+            <Input
+              size="sm"
               type="number"
+              className="w-16"
               value={when.min ?? 1}
               onChange={(e) => setWhen({ ...when, min: parseInt(e.target.value || '1', 10) })}
-              className="w-16 rounded border border-gray-300 px-2 py-1 text-xs"
             />
             <span className="text-xs text-gray-500">items</span>
           </>
@@ -159,20 +158,21 @@ function FlagEditor({ flag, fields, groups, onChange, onRemove }) {
           <div className="w-full space-y-1">
             {(when.all || []).map((w, i) => (
               <div key={i} className="flex items-center gap-2">
-                <select
+                <Select
+                  size="sm"
+                  className="w-52"
                   value={w.field || ''}
                   onChange={(e) => {
                     const all = [...when.all];
                     all[i] = { ...w, field: e.target.value, equals: w.equals ?? '' };
                     setWhen({ ...when, all });
                   }}
-                  className="w-52 rounded border border-gray-300 px-2 py-1 text-xs"
                 >
                   <option value="">— choose an answer —</option>
                   {fields.map((f) => (
                     <option key={f.id} value={f.id}>{f.label}</option>
                   ))}
-                </select>
+                </Select>
                 <EqualsWidget
                   field={fields.find((f) => f.id === w.field)}
                   value={w.equals}
@@ -182,25 +182,27 @@ function FlagEditor({ flag, fields, groups, onChange, onRemove }) {
                     setWhen({ ...when, all });
                   }}
                 />
-                <button
+                <Button
+                  variant="link"
+                  className="text-red-600"
                   onClick={() => setWhen({ ...when, all: when.all.filter((_, j) => j !== i) })}
-                  className="text-xs text-red-600 hover:underline"
                 >
                   Remove
-                </button>
+                </Button>
               </div>
             ))}
-            <button
+            <Button
+              variant="dashed"
+              size="xxs"
               onClick={() => setWhen({ ...when, all: [...when.all, { field: '', equals: '' }] })}
-              className="rounded-md border border-dashed border-gray-300 px-2 py-1 text-xs text-gray-600 hover:bg-gray-50"
             >
               + Add condition
-            </button>
+            </Button>
           </div>
         )}
-        <button onClick={onRemove} className="ml-auto text-xs text-red-600 hover:underline">
+        <Button variant="link" className="ml-auto text-red-600" onClick={onRemove}>
           Remove
-        </button>
+        </Button>
       </div>
       <AdvancedKey
         label="Internal key"
@@ -237,7 +239,9 @@ function ComputedEditor({ computed, fields, flags, onChange, onRemove }) {
   return (
     <div className="rounded-md border border-gray-200 bg-gray-50 p-3 space-y-2">
       <div className="flex flex-wrap items-center gap-2">
-        <input
+        <Input
+          size="sm"
+          className="w-56"
           value={label}
           onChange={(e) => {
             const next = { ...computed, label: e.target.value };
@@ -246,14 +250,14 @@ function ComputedEditor({ computed, fields, flags, onChange, onRemove }) {
             onChange(next);
           }}
           placeholder="Output name (e.g. Executor clause)"
-          className="w-56 rounded border border-gray-300 px-2 py-1 text-xs"
         />
         <span className="text-xs text-gray-500">=</span>
-        <input
+        <Input
+          size="sm"
+          className="flex-1"
           value={computed.template ?? computed.value ?? ''}
           onChange={(e) => onChange({ ...computed, template: e.target.value, value: undefined })}
           placeholder="Sentence, e.g. I appoint … as executor."
-          className="flex-1 rounded border border-gray-300 px-2 py-1 text-xs"
         />
         <select
           value={currentToken}
@@ -275,9 +279,9 @@ function ComputedEditor({ computed, fields, flags, onChange, onRemove }) {
               <option key={f.key} value={`{flags.${f.key}}`}>flag: {f.label || f.key}</option>
             ))}
         </select>
-        <button onClick={onRemove} className="text-xs text-red-600 hover:underline">
+        <Button variant="link" className="text-red-600" onClick={onRemove}>
           Remove
-        </button>
+        </Button>
       </div>
       <AdvancedKey
         label="Internal key"
@@ -386,12 +390,12 @@ export default function RulesEditorPage() {
     onError: (e) => setError(`Test failed: ${e.message}`),
   });
 
-  if (isLoading || !definition) return <p className="text-gray-500">Loading…</p>;
+  if (isLoading || !definition) return <Loading />;
   if (isError) {
     return (
-      <div className="rounded-md bg-red-50 border border-red-200 px-4 py-2 text-sm text-red-700">
+      <Alert variant="error">
         Failed to load rule: {queryError?.message}
-      </div>
+      </Alert>
     );
   }
 
@@ -405,30 +409,27 @@ export default function RulesEditorPage() {
   };
 
   return (
-    <div className="space-y-6 max-w-4xl">
-      <div className="flex items-center justify-between">
-        <h2 className="text-xl font-semibold">Edit Rules</h2>
-        <span
-          className={`rounded-full px-3 py-1 text-xs font-medium ${
-            status === 'published' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'
-          }`}
-        >
-          {status}
-        </span>
-      </div>
+    <PageScaffold
+      title="Edit Rules"
+      actions={
+        <>
+          <StatusBadge status={status} size="md" />
+          <Button onClick={() => saveMut.mutate({ definition })} disabled={saveMut.isPending} size="lg">
+            {saveMut.isPending ? 'Saving…' : 'Save Draft'}
+          </Button>
+          <Button variant="success" onClick={() => publishMut.mutate()} disabled={publishMut.isPending} size="lg">
+            {publishMut.isPending ? 'Publishing…' : 'Publish'}
+          </Button>
+        </>
+      }
+    >
 
-      {error && (
-        <div className="rounded-md bg-red-50 border border-red-200 px-4 py-2 text-sm text-red-700">{error}</div>
-      )}
-      {notice && (
-        <div className="rounded-md bg-green-50 border border-green-200 px-4 py-2 text-sm text-green-700">
-          {notice}
-        </div>
-      )}
+      {error && <Alert variant="error">{error}</Alert>}
+      {notice && <Alert variant="success">{notice}</Alert>}
       {!data?.questionSetId && (
-        <div className="rounded-md bg-amber-50 border border-amber-200 px-4 py-2 text-sm text-amber-700">
+        <Alert variant="warn">
           This rule is not linked to a question set — link one so the editor can offer its answers and lists.
-        </div>
+        </Alert>
       )}
 
       <div className="rounded-lg border border-gray-200 bg-white p-4 space-y-3">
@@ -446,12 +447,13 @@ export default function RulesEditorPage() {
             onRemove={() => setFlags(definition.flags.filter((_, j) => j !== i))}
           />
         ))}
-        <button
+        <Button
+          variant="dashed"
+          size="sm"
           onClick={() => setFlags([...(definition.flags || []), { key: '', label: '', when: { field: '', equals: '' } }])}
-          className="rounded-md border border-dashed border-gray-300 px-3 py-1.5 text-xs text-gray-600 hover:bg-gray-50"
         >
           + Add flag
-        </button>
+        </Button>
       </div>
 
       <div className="rounded-lg border border-gray-200 bg-white p-4 space-y-3">
@@ -469,12 +471,13 @@ export default function RulesEditorPage() {
             onRemove={() => setComputed(definition.computed.filter((_, j) => j !== i))}
           />
         ))}
-        <button
+        <Button
+          variant="dashed"
+          size="sm"
           onClick={() => setComputed([...(definition.computed || []), { key: '', label: '', template: '' }])}
-          className="rounded-md border border-dashed border-gray-300 px-3 py-1.5 text-xs text-gray-600 hover:bg-gray-50"
         >
           + Add computed
-        </button>
+        </Button>
       </div>
 
       <div className="rounded-lg border border-gray-200 bg-white p-4 space-y-3">
@@ -503,10 +506,11 @@ export default function RulesEditorPage() {
           <summary className="cursor-pointer text-[11px] text-gray-400 hover:text-gray-600">
             Advanced — list keys
           </summary>
-          <input
+          <Input
+            size="sm"
+            className="mt-1 w-full font-mono text-xs"
             value={(definition.includeGroups || []).join(', ')}
             onChange={(e) => setGroups(e.target.value.split(',').map((s) => s.trim()).filter(Boolean))}
-            className="mt-1 w-full rounded border border-gray-300 px-2 py-1 font-mono text-xs"
             placeholder="children, assets, beneficiaries"
           />
         </details>
@@ -556,7 +560,9 @@ export default function RulesEditorPage() {
                 };
                 return (
                 <div key={key} className="flex items-center gap-2">
-                  <input
+                  <Input
+                    size="sm"
+                    className="w-48 font-mono"
                     value={key}
                     onChange={(e) => {
                       const next = { ...maps };
@@ -565,7 +571,6 @@ export default function RulesEditorPage() {
                       update(next);
                     }}
                     placeholder="field name (e.g. fullName)"
-                    className="w-48 rounded border border-gray-300 px-2 py-1 text-xs font-mono"
                   />
                   <span className="text-xs text-gray-500">←</span>
                   <select
@@ -581,51 +586,37 @@ export default function RulesEditorPage() {
                         <option key={f.id} value={`{item.${f.id}}`}>{f.label}</option>
                       ))}
                   </select>
-                  <input
+                  <Input
+                    size="sm"
+                    className="flex-1 font-mono"
                     value={template}
                     onChange={(e) => update({ ...maps, [key]: e.target.value })}
-                    className="flex-1 rounded border border-gray-300 px-2 py-1 text-xs font-mono"
                     placeholder="{item.name}"
                   />
-                  <button
+                  <Button
+                    variant="link"
+                    className="text-red-600"
                     onClick={() => {
                       const next = { ...maps };
                       delete next[key];
                       update(next);
                     }}
-                    className="text-xs text-red-600 hover:underline"
                   >
                     Remove
-                  </button>
+                  </Button>
                 </div>
                 );
               })}
-              <button
+              <Button
+                variant="dashedIndigo"
+                size="xs"
                 onClick={() => update({ ...maps, '': '' })}
-                className="rounded-md border border-dashed border-indigo-300 px-3 py-1 text-xs text-indigo-600 hover:bg-indigo-50"
               >
                 + Add row field
-              </button>
+              </Button>
             </div>
           );
         })}
-      </div>
-
-      <div className="flex items-center gap-3">
-        <button
-          onClick={() => saveMut.mutate({ definition })}
-          disabled={saveMut.isPending}
-          className="rounded-md bg-slate-900 px-5 py-2 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-50"
-        >
-          {saveMut.isPending ? 'Saving…' : 'Save Draft'}
-        </button>
-        <button
-          onClick={() => publishMut.mutate()}
-          disabled={publishMut.isPending}
-          className="rounded-md bg-green-700 px-5 py-2 text-sm font-medium text-white hover:bg-green-600 disabled:opacity-50"
-        >
-          {publishMut.isPending ? 'Publishing…' : 'Publish'}
-        </button>
       </div>
 
       <FieldReference
@@ -671,7 +662,8 @@ export default function RulesEditorPage() {
       <div className="rounded-lg border border-gray-200 bg-white p-4 space-y-3">
         <p className="text-sm font-semibold text-gray-700">Test the rules</p>
         <div className="flex items-center gap-3">
-          <button
+          <Button
+            variant="indigo"
             onClick={() => {
               setError('');
               setNotice('');
@@ -679,10 +671,9 @@ export default function RulesEditorPage() {
             }}
             disabled={genSampleMut.isPending || !data?.questionSetId}
             title={data?.questionSetId ? '' : 'Link a question set to generate a sample'}
-            className="rounded-md bg-indigo-700 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-600 disabled:opacity-50"
           >
             {genSampleMut.isPending ? 'Generating…' : 'Generate sample submission & run rules'}
-          </button>
+          </Button>
           {!data?.questionSetId && (
             <span className="text-xs text-amber-600">Link a question set above, then generate.</span>
           )}
@@ -700,13 +691,16 @@ export default function RulesEditorPage() {
             Advanced — edit sample JSON manually and run rules
           </summary>
           <div className="mt-2 space-y-2">
-            <textarea
+            <Textarea
+              size="sm"
+              className="w-full font-mono text-xs"
+              rows={6}
               value={answersText}
               onChange={(e) => setAnswersText(e.target.value)}
-              rows={6}
-              className="w-full rounded-md border border-gray-300 px-3 py-2 text-xs font-mono"
             />
-            <button
+            <Button
+              variant="outline"
+              size="sm"
               onClick={() => {
                 setError('');
                 setNotice('');
@@ -717,13 +711,12 @@ export default function RulesEditorPage() {
                 }
               }}
               disabled={testMut.isPending}
-              className="rounded-md border border-gray-300 px-3 py-1.5 text-xs text-gray-600 hover:bg-gray-50"
             >
               {testMut.isPending ? 'Evaluating…' : 'Run rules → canonical JSON'}
-            </button>
+            </Button>
           </div>
         </details>
       </div>
-    </div>
+    </PageScaffold>
   );
 }

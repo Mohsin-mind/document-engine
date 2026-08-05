@@ -1,6 +1,4 @@
-const inputBase =
-  'w-full rounded-md border px-3 py-2 text-sm focus:outline-none focus:ring-2 ' +
-  'border-gray-300 focus:ring-indigo-200';
+import { Input, Select } from '../ui/index.jsx';
 
 function errorClass(error) {
   return error ? 'border-red-400 focus:ring-red-200' : '';
@@ -13,11 +11,12 @@ export default function FieldInput({ field, value, onChange, error }) {
       <label className="block text-sm font-medium text-gray-700 mb-1">
         {label} {field.required && <span className="text-red-500">*</span>}
       </label>
-      <input
+      <Input
+        size="md"
+        className={`w-full ${errorClass(error)}`}
         type={field.type}
         value={value ?? ''}
         onChange={(e) => onChange(field.type === 'number' ? e.target.valueAsNumber || '' : e.target.value)}
-        className={`${inputBase} ${errorClass(error)}`}
         aria-invalid={!!error}
       />
       {error && <p className="mt-1 text-xs text-red-600">{error}</p>}
@@ -31,10 +30,11 @@ export function SelectInput({ field, value, onChange, error }) {
       <label className="block text-sm font-medium text-gray-700 mb-1">
         {field.label || field.id} {field.required && <span className="text-red-500">*</span>}
       </label>
-      <select
+      <Select
+        size="md"
+        className={`w-full ${errorClass(error)}`}
         value={value ?? ''}
         onChange={(e) => onChange(e.target.value)}
-        className={`${inputBase} ${errorClass(error)}`}
         aria-invalid={!!error}
       >
         <option value="">— select —</option>
@@ -43,7 +43,7 @@ export function SelectInput({ field, value, onChange, error }) {
             {o}
           </option>
         ))}
-      </select>
+      </Select>
       {error && <p className="mt-1 text-xs text-red-600">{error}</p>}
     </div>
   );

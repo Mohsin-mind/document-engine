@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { listRules, createRule, deleteRule } from '../../../api/rules.js';
 import { listQuestionSets } from '../../../api/questions.js';
+import { Button, Alert, StatusBadge, Select, DataTable, Td, Loading } from '../../../components/ui';
 
 const emptyDefinition = () => ({
   flags: [],
@@ -37,25 +38,16 @@ export default function RulesPage() {
 
   const setById = (map, id) => map?.find((s) => s.id === id);
 
-  if (isLoading) return <p className="text-gray-500">Loading…</p>;
+  if (isLoading) return <Loading />;
 
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
         <h2 className="text-xl font-semibold">Rules</h2>
-        <button
-          onClick={() => setCreating(true)}
-          className="rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700"
-        >
-          New Rule
-        </button>
+        <Button onClick={() => setCreating(true)}>New Rule</Button>
       </div>
 
-      {error && (
-        <div className="mb-4 rounded-md bg-red-50 border border-red-200 px-4 py-2 text-sm text-red-700">
-          {error}
-        </div>
-      )}
+      {error && <Alert variant="error" className="mb-4">{error}</Alert>}
 
       {creating && (
         <form
@@ -69,87 +61,58 @@ export default function RulesPage() {
         >
           <div>
             <label className="block text-sm font-medium text-gray-700">Question set</label>
-            <select
-              value={questionSetId}
-              onChange={(e) => setQuestionSetId(e.target.value)}
-              className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
-            >
+            <Select size="md" className="mt-1 w-full" value={questionSetId} onChange={(e) => setQuestionSetId(e.target.value)}>
               <option value="">— select —</option>
               {questionSets?.map((s) => (
                 <option key={s.id} value={s.id}>
                   {s.name}
                 </option>
               ))}
-            </select>
+            </Select>
           </div>
           <div className="flex gap-2">
-            <button type="submit" className="rounded-md bg-slate-900 px-4 py-2 text-sm text-white">
-              Create
-            </button>
-            <button
-              type="button"
-              onClick={() => setCreating(false)}
-              className="rounded-md border border-gray-300 px-4 py-2 text-sm"
-            >
-              Cancel
-            </button>
+            <Button type="submit">Create</Button>
+            <Button variant="outline" onClick={() => setCreating(false)}>Cancel</Button>
           </div>
         </form>
       )}
 
-      <div className="overflow-hidden rounded-lg border border-gray-200 bg-white">
-        <table className="min-w-full divide-y divide-gray-200 text-sm">
-          <thead className="bg-gray-50">
-            <tr>
-              <th className="px-4 py-3 text-left font-medium text-gray-600">Version</th>
-              <th className="px-4 py-3 text-left font-medium text-gray-600">Question Set</th>
-              <th className="px-4 py-3 text-left font-medium text-gray-600">Status</th>
-              <th className="px-4 py-3 text-left font-medium text-gray-600">Flags</th>
-              <th className="px-4 py-3 text-right font-medium text-gray-600">Actions</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-100">
-            {rules?.map((r) => (
-              <tr key={r.id}>
-                <td className="px-4 py-3 font-mono text-xs text-gray-500">v{r.versionNo}</td>
-                <td className="px-4 py-3 text-gray-700">
-                  {setById(questionSets, r.questionSetId)?.name || r.questionSetId}
-                </td>
-                <td className="px-4 py-3">
-                  <span
-                    className={`rounded-full px-2 py-0.5 text-xs font-medium ${
-                      r.status === 'published'
-                        ? 'bg-green-100 text-green-700'
-                        : 'bg-amber-100 text-amber-700'
-                    }`}
-                  >
-                    {r.status}
-                  </span>
-                </td>
-                <td className="px-4 py-3 text-xs text-gray-500">
-                  {(r.definition.flags || []).map((f) => f.key).filter(Boolean).join(', ') || '—'}
-                </td>
-                <td className="px-4 py-3 text-right space-x-2">
-                  <button
-                    onClick={() => navigate(`/admin/rules/${r.id}`)}
-                    className="rounded-md border border-gray-300 px-3 py-1 text-xs hover:bg-gray-50"
-                  >
-                    Edit
-                  </button>
-                  <button
-                    onClick={() => {
-                      if (confirm('Delete this rule?')) deleteMut.mutate(r.id);
-                    }}
-                    className="rounded-md border border-red-200 px-3 py-1 text-xs text-red-600 hover:bg-red-50"
-                  >
-                    Delete
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <DataTable
+        columns={[
+          { header: 'Version' },
+          { header: 'Question Set' },
+          { header: 'Status' },
+          { header: 'Flags' },
+          { header: 'Actions', align: 'right' },
+        ]}
+      >
+        {rules?.map((r) => (
+          <tr key={r.id}>
+            <Td className="font-mono text-xs text-gray-500">v{r.versionNo}</Td>
+            <Td className="text-gray-700">{setById(questionSets, r.questionSetId)?.name || r.questionSetId}</Td>
+            <Td>
+              <StatusBadge status={r.status} />
+            </Td>
+            <Td className="text-xs text-gray-500">
+              {(r.definition.flags || []).map((f) => f.key).filter(Boolean).join(', ') || '—'}
+            </Td>
+            <Td align="right" className="space-x-2">
+              <Button variant="outline" size="xs" onClick={() => navigate(`/admin/rules/${r.id}`)}>
+                Edit
+              </Button>
+              <Button
+                variant="outlineDanger"
+                size="xs"
+                onClick={() => {
+                  if (confirm('Delete this rule?')) deleteMut.mutate(r.id);
+                }}
+              >
+                Delete
+              </Button>
+            </Td>
+          </tr>
+        ))}
+      </DataTable>
     </div>
   );
 }

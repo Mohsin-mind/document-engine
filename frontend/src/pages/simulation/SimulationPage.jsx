@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   getQuestionnaire,
   getSubmission,
@@ -10,9 +10,11 @@ import {
 import { conditionMatches, validateAnswers } from '@document-engine/shared';
 import { FieldRenderer } from '../../components/inputs/FieldInput.jsx';
 import GenerationStatus from '../../components/simulation/GenerationStatus.jsx';
+import { Button, Alert, Loading } from '../../components/ui';
 
 export default function SimulationPage() {
   const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
   const [questionnaire, setQuestionnaire] = useState(null);
   const [submissionId, setSubmissionId] = useState(null);
   const [answers, setAnswers] = useState({});
@@ -124,11 +126,9 @@ export default function SimulationPage() {
     }
   };
 
-  if (loading) return <p className="text-gray-500">Loading…</p>;
+  if (loading) return <Loading />;
   if (loadError) {
-    return (
-      <div className="rounded-md bg-red-50 border border-red-200 px-4 py-2 text-sm text-red-700">{loadError}</div>
-    );
+    return <Alert variant="error">{loadError}</Alert>;
   }
   if (submitted) {
     return (
@@ -139,12 +139,9 @@ export default function SimulationPage() {
           Thank you. Your answers have been validated and the following documents are being prepared:
         </p>
         {submissionId && <GenerationStatus submissionId={submissionId} />}
-        <a
-          href="/downloads"
-          className="mt-6 inline-block rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700"
-        >
+        <Button className="mt-6 inline-block" onClick={() => navigate('/downloads')}>
           Open Download Center
-        </a>
+        </Button>
       </div>
     );
   }
@@ -181,12 +178,14 @@ export default function SimulationPage() {
                   <span className="text-sm font-medium text-gray-600">
                     {current.repeatable.label} #{rowIndex + 1}
                   </span>
-                  <button
+                  <Button
+                    variant="link"
+                    size="none"
                     onClick={() => removeRow(current.repeatable.id, rowIndex)}
-                    className="text-xs text-red-600 hover:underline"
+                    className="text-xs text-red-600"
                   >
                     Remove
-                  </button>
+                  </Button>
                 </div>
                 {current.repeatable.fields.map((f) => (
                   <FieldRenderer
@@ -199,12 +198,9 @@ export default function SimulationPage() {
                 ))}
               </div>
             ))}
-            <button
-              onClick={() => addRow(current.repeatable.id)}
-              className="rounded-md border border-dashed border-gray-300 px-3 py-1.5 text-xs text-gray-600 hover:bg-gray-50"
-            >
+            <Button variant="dashed" size="sm" onClick={() => addRow(current.repeatable.id)}>
               + {current.repeatable.addLabel || `Add ${current.repeatable.label.toLowerCase()}`}
-            </button>
+            </Button>
           </div>
         ) : (
           <div className="space-y-4">
@@ -224,39 +220,26 @@ export default function SimulationPage() {
       <div className="mt-6 flex items-center justify-between">
         <div className="flex gap-2">
           {sectionIndex > 0 && (
-            <button
-              onClick={goBack}
-              className="rounded-md border border-gray-300 px-4 py-2 text-sm hover:bg-gray-50"
-            >
+            <Button variant="outline" onClick={goBack}>
               Back
-            </button>
+            </Button>
           )}
           {sectionIndex < sections.length - 1 && (
-            <button
-              onClick={goNext}
-              className="rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700"
-            >
+            <Button onClick={goNext}>
               Next
-            </button>
+            </Button>
           )}
           {sectionIndex === sections.length - 1 && (
-            <button
-              onClick={handleSubmit}
-              className="rounded-md bg-green-700 px-4 py-2 text-sm font-medium text-white hover:bg-green-600"
-            >
+            <Button variant="success" onClick={handleSubmit}>
               Submit
-            </button>
+            </Button>
           )}
         </div>
         <div className="flex items-center gap-3">
           {savedAt && <span className="text-xs text-gray-400">Saved {savedAt}</span>}
-          <button
-            onClick={saveDraft}
-            disabled={saving}
-            className="rounded-md border border-gray-300 px-3 py-2 text-sm hover:bg-gray-50 disabled:opacity-50"
-          >
+          <Button variant="outline" onClick={saveDraft} disabled={saving}>
             {saving ? 'Saving…' : 'Save progress'}
-          </button>
+          </Button>
         </div>
       </div>
     </div>

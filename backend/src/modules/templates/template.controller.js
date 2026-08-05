@@ -19,6 +19,10 @@ const getById = asyncHandler(async (req, res) => {
   res.json({ data: await service.getTemplate(req.params.id) });
 });
 
+const createVersion = asyncHandler(async (req, res) => {
+  res.status(201).json({ data: await service.createDraftVersion(req.params.id) });
+});
+
 const saveMappings = asyncHandler(async (req, res) => {
   const version = await service.saveMappings(req.params.id, req.params.versionId, req.body);
   res.json({ data: version });
@@ -46,4 +50,4 @@ const remove = asyncHandler(async (req, res) => {
   res.json({ data: await service.deleteTemplate(req.params.id) });
 });
 
-module.exports = { list, create, getById, saveMappings, runTest, publish, generateSample, update, remove };
+module.exports = { list, create, getById, createVersion, saveMappings, runTest, publish, generateSample, update, remove };

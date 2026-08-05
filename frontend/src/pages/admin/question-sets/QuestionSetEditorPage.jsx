@@ -8,6 +8,7 @@ import {
 } from '../../../api/questions.js';
 import FieldReference from '../../../components/FieldReference.jsx';
 import Collapsible from '../../../components/Collapsible.jsx';
+import { PageScaffold, Button, Alert, StatusBadge, Input, Select, Loading } from '../../../components/ui';
 
 const uid = () => `q${Math.random().toString(36).slice(2, 8)}`;
 
@@ -23,37 +24,30 @@ const TYPE_META = {
 function EqualsWidget({ field, value, onChange, placeholder }) {
   if (field?.type === 'dropdown') {
     return (
-      <select
-        value={value ?? ''}
-        onChange={(e) => onChange(e.target.value)}
-        className="w-full rounded border border-gray-300 px-2 py-1 text-xs"
-      >
+      <Select size="sm" className="w-full" value={value ?? ''} onChange={(e) => onChange(e.target.value)}>
         <option value="">— choose one —</option>
         {(field.options || []).map((o) => (
           <option key={o} value={o}>{o}</option>
         ))}
-      </select>
+      </Select>
     );
   }
   if (field?.type === 'yesno') {
     return (
-      <select
-        value={value ?? ''}
-        onChange={(e) => onChange(e.target.value)}
-        className="w-full rounded border border-gray-300 px-2 py-1 text-xs"
-      >
+      <Select size="sm" className="w-full" value={value ?? ''} onChange={(e) => onChange(e.target.value)}>
         <option value="">— choose one —</option>
         <option value="yes">Yes</option>
         <option value="no">No</option>
-      </select>
+      </Select>
     );
   }
   return (
-    <input
+    <Input
+      size="sm"
+      className="w-full"
       placeholder={placeholder || 'equals value'}
       value={value ?? ''}
       onChange={(e) => onChange(e.target.value)}
-      className="w-full rounded border border-gray-300 px-2 py-1 text-xs"
     />
   );
 }
@@ -84,26 +78,21 @@ function OptionsEditor({ options, onChange }) {
       <p className="text-[11px] text-gray-500">Options (shown to the customer as a list to pick from):</p>
       {options.map((o, i) => (
         <div key={i} className="flex items-center gap-2">
-          <input
+          <Input
+            size="sm"
+            className="flex-1"
             value={o}
             onChange={(e) => set(i, e.target.value)}
-            className="flex-1 rounded border border-gray-300 px-2 py-1 text-xs"
             placeholder={`Option ${i + 1}`}
           />
-          <button
-            onClick={() => onChange(options.filter((_, j) => j !== i))}
-            className="text-xs text-red-600 hover:underline"
-          >
+          <Button variant="link" className="text-red-600" onClick={() => onChange(options.filter((_, j) => j !== i))}>
             Remove
-          </button>
+          </Button>
         </div>
       ))}
-      <button
-        onClick={() => onChange([...options, ''])}
-        className="rounded-md border border-dashed border-gray-300 px-2 py-1 text-xs text-gray-600 hover:bg-gray-50"
-      >
+      <Button variant="dashed" size="xxs" onClick={() => onChange([...options, ''])}>
         + Add option
-      </button>
+      </Button>
     </div>
   );
 }
@@ -116,24 +105,26 @@ function FieldEditor({ field, onChange, onRemove, prefix, priorFields }) {
       <div className="grid grid-cols-6 gap-2 items-start">
         <div className="col-span-3">
           <label className="text-xs text-gray-500">Question</label>
-          <input
+          <Input
+            size="field"
+            className="mt-0.5 w-full"
             value={field.label}
             onChange={(e) => onChange({ ...field, label: e.target.value })}
-            className="mt-0.5 w-full rounded border border-gray-300 px-2 py-1 text-sm"
             placeholder="e.g. Full legal name"
           />
         </div>
         <div className="col-span-2">
           <label className="text-xs text-gray-500">Answer type</label>
-          <select
+          <Select
+            size="sm"
+            className="mt-0.5 w-full"
             value={field.type}
             onChange={(e) => onChange({ ...field, type: e.target.value, options: undefined })}
-            className="mt-0.5 w-full rounded border border-gray-300 px-2 py-1 text-xs"
           >
             {Object.entries(TYPE_META).map(([value, t]) => (
               <option key={value} value={value}>{t.label}</option>
             ))}
-          </select>
+          </Select>
           <p className="mt-0.5 text-[11px] text-gray-400">{meta.hint}</p>
         </div>
         <div className="col-span-1 flex flex-col items-end gap-2 pt-5">
@@ -145,16 +136,18 @@ function FieldEditor({ field, onChange, onRemove, prefix, priorFields }) {
             />
             Required
           </label>
-          <button onClick={onRemove} className="text-xs text-red-600 hover:underline">
+          <Button variant="link" className="text-red-600" onClick={onRemove}>
             Remove
-          </button>
+          </Button>
         </div>
       </div>
 
       {prefix === 'q' && priorFields.length > 0 && (
         <div className="flex items-center gap-2">
           <label className="text-xs text-gray-500 whitespace-nowrap">Show only if</label>
-          <select
+          <Select
+            size="sm"
+            className="w-56"
             value={field.condition?.field ?? ''}
             onChange={(e) =>
               onChange({
@@ -164,13 +157,12 @@ function FieldEditor({ field, onChange, onRemove, prefix, priorFields }) {
                   : undefined,
               })
             }
-            className="w-56 rounded border border-gray-300 px-2 py-1 text-xs"
           >
             <option value="">— always show —</option>
             {priorFields.map((f) => (
               <option key={f.id} value={f.id}>{f.label}</option>
             ))}
-          </select>
+          </Select>
           {field.condition?.field && (
             <>
               <span className="text-xs text-gray-500">equals</span>
@@ -276,10 +268,11 @@ function SectionEditor({ section, onChange, onRemove, onAddQuestion, priorFields
   return (
     <div className="rounded-lg border border-gray-200 bg-white p-4 space-y-4">
       <div className="flex items-center gap-3">
-        <input
+        <Input
+          size="md"
           value={section.title}
           onChange={(e) => onChange({ ...section, title: e.target.value })}
-          className="flex-1 rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium"
+          className="flex-1 font-medium"
           placeholder="Section title (e.g. Grantor details)"
         />
         <label className="flex items-center gap-1 text-xs text-gray-600">
@@ -303,9 +296,9 @@ function SectionEditor({ section, onChange, onRemove, onAddQuestion, priorFields
           />
           Repeatable group
         </label>
-        <button onClick={onRemove} className="text-sm text-red-600 hover:underline">
+        <Button variant="link" className="text-sm text-red-600" onClick={onRemove}>
           Remove section
-        </button>
+        </Button>
       </div>
 
       <div className="space-y-2">
@@ -329,12 +322,9 @@ function SectionEditor({ section, onChange, onRemove, onAddQuestion, priorFields
             />
           </QuestionRow>
         ))}
-        <button
-          onClick={onAddQuestion}
-          className="rounded-md border border-dashed border-gray-300 px-3 py-1.5 text-xs text-gray-600 hover:bg-gray-50"
-        >
+        <Button variant="dashed" size="sm" onClick={onAddQuestion}>
           + Add question
-        </button>
+        </Button>
       </div>
 
       {rep && (
@@ -356,26 +346,29 @@ function SectionEditor({ section, onChange, onRemove, onAddQuestion, priorFields
             <div className="mt-2 space-y-2">
               <div className="flex items-center gap-2">
                 <label className="text-[11px] text-gray-500 whitespace-nowrap">List label</label>
-                <input
+                <Input
+                  size="sm"
+                  className="w-48"
                   value={rep.label}
                   onChange={(e) => setRep({ ...rep, label: e.target.value })}
-                  className="w-48 rounded border border-gray-300 px-2 py-1 text-xs"
                   placeholder="list label (e.g. Children)"
                 />
             <div className="ml-auto flex items-center gap-2 text-[11px] text-gray-500">
               <span>min</span>
-              <input
+              <Input
+                size="sm"
                 type="number"
+                className="w-14"
                 value={rep.min}
                 onChange={(e) => setRep({ ...rep, min: parseInt(e.target.value || '0', 10) })}
-                className="w-14 rounded border border-gray-300 px-2 py-1 text-xs"
               />
               <span>max</span>
-              <input
+              <Input
+                size="sm"
                 type="number"
+                className="w-14"
                 value={rep.max}
                 onChange={(e) => setRep({ ...rep, max: parseInt(e.target.value || '10', 10) })}
-                className="w-14 rounded border border-gray-300 px-2 py-1 text-xs"
               />
             </div>
             <AdvancedId id={rep.id} />
@@ -385,31 +378,34 @@ function SectionEditor({ section, onChange, onRemove, onAddQuestion, priorFields
               <div key={f._k || f.id} className="rounded-md border border-indigo-100 bg-white p-2 space-y-2">
                 <div className="grid grid-cols-6 gap-2 items-start">
                   <div className="col-span-3">
-                    <input
+                    <Input
+                      size="sm"
+                      className="w-full"
                       value={f.label}
                       onChange={(e) => setRepField(i, { ...f, label: e.target.value })}
-                      className="w-full rounded border border-gray-300 px-2 py-1 text-xs"
                       placeholder="field label (e.g. Full name)"
                     />
                   </div>
                   <div className="col-span-2">
-                    <select
+                    <Select
+                      size="sm"
+                      className="w-full"
                       value={f.type}
                       onChange={(e) => setRepField(i, { ...f, type: e.target.value, options: undefined })}
-                      className="w-full rounded border border-gray-300 px-2 py-1 text-xs"
                     >
                       {Object.entries(TYPE_META).map(([value, t]) => (
                         <option key={value} value={value}>{t.label}</option>
                       ))}
-                    </select>
+                    </Select>
                   </div>
                   <div className="col-span-1 flex justify-end">
-                    <button
+                    <Button
+                      variant="link"
+                      className="text-red-600"
                       onClick={() => setRep({ ...rep, fields: rep.fields.filter((_, j) => j !== i) })}
-                      className="text-xs text-red-600 hover:underline"
                     >
                       Remove
-                    </button>
+                    </Button>
                   </div>
                 </div>
                 {f.type === 'dropdown' && (
@@ -421,7 +417,9 @@ function SectionEditor({ section, onChange, onRemove, onAddQuestion, priorFields
                 <AdvancedId id={f.id} />
               </div>
             ))}
-            <button
+            <Button
+              variant="dashedIndigo"
+              size="xs"
               onClick={() =>
                 setRep({
                   ...rep,
@@ -431,10 +429,9 @@ function SectionEditor({ section, onChange, onRemove, onAddQuestion, priorFields
                   ],
                 })
               }
-              className="rounded-md border border-dashed border-indigo-300 px-3 py-1 text-xs text-indigo-600 hover:bg-indigo-50"
             >
               + Add field
-            </button>
+            </Button>
           </div>
         </div>
         </Collapsible>
@@ -503,13 +500,9 @@ export default function QuestionSetEditorPage() {
     onError: (e) => setError(e.message),
   });
 
-  if (isLoading || !definition) return <p className="text-gray-500">Loading…</p>;
+  if (isLoading || !definition) return <Loading />;
   if (isError) {
-    return (
-      <div className="rounded-md bg-red-50 border border-red-200 px-4 py-2 text-sm text-red-700">
-        Failed to load question set: {queryError?.message}
-      </div>
-    );
+    return <Alert variant="error">Failed to load question set: {queryError?.message}</Alert>;
   }
 
   const setSection = (index, section) => {
@@ -535,46 +528,33 @@ export default function QuestionSetEditorPage() {
   };
 
   return (
-    <div className="space-y-6 max-w-4xl">
-      <div className="flex items-center justify-between">
-        <h2 className="text-xl font-semibold">Edit Question Set</h2>
-        <span
-          className={`rounded-full px-3 py-1 text-xs font-medium ${
-            status === 'published' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'
-          }`}
-        >
-          {status}
-        </span>
-      </div>
+    <PageScaffold
+      title="Edit Question Set"
+      actions={
+        <>
+          <StatusBadge status={status} size="md" />
+          <Button onClick={() => saveMut.mutate({ name, description, definition })} disabled={saveMut.isPending} size="lg">
+            {saveMut.isPending ? 'Saving…' : 'Save Draft'}
+          </Button>
+          <Button variant="success" onClick={() => publishMut.mutate()} disabled={publishMut.isPending} size="lg">
+            {publishMut.isPending ? 'Publishing…' : 'Publish'}
+          </Button>
+        </>
+      }
+    >
 
-      {error && (
-        <div className="rounded-md bg-red-50 border border-red-200 px-4 py-2 text-sm text-red-700">
-          {error}
-        </div>
-      )}
-      {notice && (
-        <div className="rounded-md bg-green-50 border border-green-200 px-4 py-2 text-sm text-green-700">
-          {notice}
-        </div>
-      )}
+      {error && <Alert variant="error">{error}</Alert>}
+      {notice && <Alert variant="success">{notice}</Alert>}
 
       <div className="rounded-lg border border-gray-200 bg-white p-4 space-y-3">
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className="block text-sm font-medium text-gray-700">Name</label>
-            <input
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
-            />
+            <Input size="md" className="mt-1 w-full" value={name} onChange={(e) => setName(e.target.value)} />
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700">Description</label>
-            <input
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
-            />
+            <Input size="md" className="mt-1 w-full" value={description} onChange={(e) => setDescription(e.target.value)} />
           </div>
         </div>
       </div>
@@ -603,7 +583,9 @@ export default function QuestionSetEditorPage() {
             }}
           />
         ))}
-        <button
+        <Button
+          variant="dashed"
+          size="md"
           onClick={() =>
             setDefinition({
               ...definition,
@@ -613,27 +595,9 @@ export default function QuestionSetEditorPage() {
               ],
             })
           }
-          className="rounded-md border border-dashed border-gray-300 px-4 py-2 text-sm text-gray-600 hover:bg-gray-50"
         >
           + Add section
-        </button>
-      </div>
-
-      <div className="flex items-center gap-3">
-        <button
-          onClick={() => saveMut.mutate({ name, description, definition })}
-          disabled={saveMut.isPending}
-          className="rounded-md bg-slate-900 px-5 py-2 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-50"
-        >
-          {saveMut.isPending ? 'Saving…' : 'Save Draft'}
-        </button>
-        <button
-          onClick={() => publishMut.mutate()}
-          disabled={publishMut.isPending}
-          className="rounded-md bg-green-700 px-5 py-2 text-sm font-medium text-white hover:bg-green-600 disabled:opacity-50"
-        >
-          {publishMut.isPending ? 'Publishing…' : 'Publish'}
-        </button>
+        </Button>
       </div>
 
       <div className="rounded-lg border border-gray-200 bg-white p-4">
@@ -669,6 +633,6 @@ export default function QuestionSetEditorPage() {
           ],
         }))}
       />
-    </div>
+    </PageScaffold>
   );
 }

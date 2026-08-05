@@ -1,5 +1,6 @@
 const PizZip = require('pizzip');
 const { randomUUID } = require('crypto');
+const { Op } = require('sequelize');
 const { Template, TemplateVersion, DocumentDefinition, QuestionSetVersion, QuestionSet, Rule } = require('../../db');
 const { NotFoundError, ValidationError, ConflictError } = require('../../common/errors');
 const { getStorage } = require('../../common/storage');
@@ -87,6 +88,45 @@ async function getVersion(templateId, versionId) {
   if (!version) throw new NotFoundError('Template version not found');
   const definition = await DocumentDefinition.findOne({ where: { templateVersionId: version.id } });
   return { ...toVersionDto(version), definition: toDefinitionDto(definition) };
+}
+
+async function createDraftVersion(templateId) {
+  const template = await Template.findByPk(templateId);
+  if (!template) throw new NotFoundError('Template not found');
+  const versions = await TemplateVersion.findAll({
+    where: { templateId },
+    order: [['versionNo', 'DESC']],
+  });
+  const latest = versions[0];
+  if (!latest) throw new ValidationError('Template has no versions to copy');
+  const prevDefinition = await DocumentDefinition.findOne({ where: { templateVersionId: latest.id } });
+  const nextNo = latest.versionNo + 1;
+
+  const storage = getStorage();
+  const source = await storage.read({ key: latest.storageKey });
+  const storageKey = `templates/${templateId}/v${nextNo}/prepared.docx`;
+  await storage.save({ key: storageKey, data: source });
+
+  const extractedVariables = (latest.extractedVariables || []).map((v) => ({ ...v }));
+  const allMapped = extractedVariables.length > 0 && extractedVariables.every((v) => v.jsonPath);
+  const version = await TemplateVersion.create({
+    templateId,
+    versionNo: nextNo,
+    status: 'draft',
+    storageKey,
+    extractedVariables,
+    mappingStatus: allMapped ? 'mapped-validated' : 'unmapped',
+  });
+  await template.update({ latestVersionId: version.id });
+  if (prevDefinition) {
+    await DocumentDefinition.create({
+      templateVersionId: version.id,
+      questionSetId: prevDefinition.questionSetId,
+      name: template.name,
+      status: 'draft',
+    });
+  }
+  return getVersion(template.id, version.id);
 }
 
 async function createTemplate({ name, description, questionSetId, file }) {
@@ -274,6 +314,17 @@ async function publishTemplate(templateId, versionId) {
         { status: 'published', publishedAt: new Date() },
         { where: { id: definition.id }, transaction: t }
       );
+      const sameTemplateVersions = await TemplateVersion.findAll({ where: { templateId } });
+      await DocumentDefinition.update(
+        { status: 'draft', publishedAt: null },
+        {
+          where: {
+            templateVersionId: { [Op.in]: sameTemplateVersions.map((tv) => tv.id), [Op.ne]: version.id },
+            status: 'published',
+          },
+          transaction: t,
+        }
+      );
     }
     await t.commit();
   } catch (err) {
@@ -375,11 +426,12 @@ module.exports = {
   listTemplates,
   getTemplate,
   getVersion,
+  createDraftVersion,
   createTemplate,
   saveMappings,
   runRenderTest,
   publishTemplate,
-  generateSampleCanonical,
   updateTemplateMetadata,
   deleteTemplate,
+  generateSampleCanonical,
 };

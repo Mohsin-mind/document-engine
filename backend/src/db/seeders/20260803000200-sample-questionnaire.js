@@ -64,18 +64,20 @@ const definition = {
     {
       id: 'children',
       title: 'Children',
-      questions: [],
-      repeatable: {
-        id: 'children',
-        label: 'Child',
-        addLabel: 'Add child',
-        min: 0,
-        max: 10,
-        fields: [
-          { id: 'name', type: 'text', label: 'Child full name', required: true },
-          { id: 'dob', type: 'date', label: 'Date of birth', required: true },
-        ],
-      },
+      questions: [
+        {
+          id: 'children',
+          type: 'repeatable',
+          label: 'Children',
+          addLabel: 'Add child',
+          min: 0,
+          max: 10,
+          fields: [
+            { id: 'name', type: 'text', label: 'Child full name', required: true },
+            { id: 'dob', type: 'date', label: 'Date of birth', required: true },
+          ],
+        },
+      ],
     },
     {
       id: 'executor',

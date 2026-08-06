@@ -42,9 +42,10 @@ function LeafRow({ label, value, depth }) {
   );
 }
 
-function Node({ label, value, depth }) {
+function Node({ label, rawKey, value, depth, listFields = {} }) {
   if (Array.isArray(value)) {
     const item = value[0];
+    const fieldLabels = listFields[rawKey] || {};
     return (
       <div>
         <div className="flex items-center gap-2 py-0.5" style={{ paddingLeft: `${depth * 1.25}rem` }}>
@@ -55,7 +56,7 @@ function Node({ label, value, depth }) {
         {item && typeof item === 'object' && (
           <div>
             {Object.entries(item).map(([k, v]) => (
-              <Node key={k} label={k} value={v} depth={depth + 1} />
+              <Node key={k} rawKey={k} label={fieldLabels[k] || k} value={v} depth={depth + 1} listFields={listFields} />
             ))}
           </div>
         )}
@@ -71,7 +72,7 @@ function Node({ label, value, depth }) {
         </div>
         <div>
           {Object.entries(value).map(([k, v]) => (
-            <Node key={k} label={k} value={v} depth={depth + 1} />
+            <Node key={k} rawKey={k} label={k} value={v} depth={depth + 1} listFields={listFields} />
           ))}
         </div>
       </div>
@@ -80,7 +81,7 @@ function Node({ label, value, depth }) {
   return <LeafRow label={label} value={value} depth={depth} />;
 }
 
-export default function SampleTree({ value, title, rename = {} }) {
+export default function SampleTree({ value, title, rename = {}, listFields = {} }) {
   if (value == null || typeof value !== 'object') {
     return <p className="text-xs text-gray-400">No sample yet.</p>;
   }
@@ -88,7 +89,7 @@ export default function SampleTree({ value, title, rename = {} }) {
     <div className="rounded-md border border-gray-100 bg-white p-2 max-h-72 overflow-auto">
       {title && <p className="text-[11px] font-semibold text-gray-400 uppercase mb-1">{title}</p>}
       {Object.entries(value).map(([k, v]) => (
-        <Node key={k} label={rename[k] || k} value={v} depth={0} />
+        <Node key={k} rawKey={k} label={rename[k] || k} value={v} depth={0} listFields={listFields} />
       ))}
     </div>
   );

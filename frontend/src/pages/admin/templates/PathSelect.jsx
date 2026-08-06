@@ -9,6 +9,7 @@ function toNodes(value, prefix = '', rename = {}) {
       item && typeof item === 'object'
         ? Object.entries(item).map(([k, v]) => toNode(k, v, p, rename)).flat()
         : [];
+    const headKey = prefix.replace(/\[\]$/, '');
     return [{ key: '[]', path: p, type: 'array', value, children }];
   }
   if (value && typeof value === 'object') {
@@ -41,41 +42,67 @@ const valueText = (v) => {
   return String(v);
 };
 
-export default function PathSelect({ value, onChange, paths, canonical, rename = {} }) {
+export default function PathSelect({ value, onChange, paths, canonical, rename = {}, listFields = {} }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const wrapRef = useRef(null);
 
-    const renameSegment = (p) => {
-    const m = /^([^.[]+)(\[\])?/.exec(String(p || ''));
+  // Display a canonical path with human labels: rename the head segment
+  // (question/group id -> label) and, inside a known list, the row field
+  // (field id -> label) e.g. <question label>[].<field label>.
+  const humanify = (p) => {
+    const m = /^([^.[]+)((\[\])(\.(.*))?)?$/.exec(String(p || ''));
     if (!m) return p;
-    const [, id, brackets] = m;
-    if (!rename[id]) return p;
-    return rename[id] + (brackets || '') + String(p).slice(m[0].length);
+    const [, head, , , , leafRaw] = m;
+    const headLabel = rename[head] || head;
+    if (m[2] == null) return headLabel;
+    if (!leafRaw) return `${headLabel}[]`;
+    const leafId = leafRaw;
+    const leafLabel = listFields[head]?.[leafId] || leafId;
+    return `${headLabel}[].${leafLabel}`;
   };
 
-  const reverseRename = useMemo(() => {
-    const r = {};
-    for (const [id, label] of Object.entries(rename)) if (label) r[label] = id;
-    return r;
-  }, [rename]);
+  const dehumanify = useMemo(() => {
+    const reverse = {};
+    for (const [id, label] of Object.entries(rename)) if (label) reverse[label] = id;
+    const reverseFields = {};
+    for (const [group, fields] of Object.entries(listFields)) {
+      for (const [fid, flabel] of Object.entries(fields)) {
+        reverseFields[flabel] = fid;
+      }
+    }
+    return (p) => {
+      const m = /^([^.[]+)((\[\])(\.(.*))?)?$/.exec(String(p || ''));
+      if (!m) return p;
+      const head = reverse[m[1]] ?? m[1];
+      if (m[2] == null) return head;
+      if (!m[5]) return `${head}[]`;
+      const leaf = reverseFields[m[5]] ?? m[5];
+      return `${head}[].${leaf}`;
+    };
+  }, [rename, listFields]);
 
-  const toRealPath = (p) => {
-    const m = /^([^.[]+)(\[\])?/.exec(String(p || ''));
-    if (!m) return p;
-    const [, label, brackets] = m;
-    if (!reverseRename[label]) return p;
-    return reverseRename[label] + (brackets || '') + String(p).slice(m[0].length);
-  };
-
-  const displayValue = renameSegment(value);
+  const displayValue = humanify(value);
 
   const tree = useMemo(() => {
+    const decorate = (nodes) =>
+      nodes.map((n) => {
+        if (n.type === 'array') {
+          const headId = (n.path || '').slice(0, -2);
+          const childMap = listFields[headId];
+          const children = (n.children || []).map((c) =>
+            childMap && c.key in childMap ? { ...c, key: childMap[c.key] } : c
+          );
+          n = { ...n, children };
+        }
+        return (n.children ? { ...n, children: decorate(n.children) } : n);
+      });
+
     if (canonical && typeof canonical === 'object' && !Array.isArray(canonical)) {
-      return toNodes(canonical, '', rename);
+      return decorate(toNodes(canonical, '', rename));
     }
-    return paths.map((p) => ({ key: renameSegment(p), path: p, type: 'leaf', value: p, children: [] }));
-  }, [canonical, paths, rename]);
+    return paths.map((p) => ({ key: humanify(p), path: p, type: 'leaf', value: p, children: [] }));
+  }, [canonical, paths, rename, listFields]);
 
   const selectedPath = String(value || '').replace(/\[\d+\]/g, '[]');
 
@@ -160,7 +187,7 @@ export default function PathSelect({ value, onChange, paths, canonical, rename =
         value={displayValue}
         title={value || undefined}
         onChange={(e) => {
-          onChange(toRealPath(e.target.value));
+          onChange(dehumanify(e.target.value));
           setOpen(true);
         }}
         onFocus={() => {

@@ -26,7 +26,7 @@ function sampleValue(label, type, options, sectionTitle, index = 0) {
       if (l.includes('name') || l.includes('trustee')) {
         if (l.includes('successor 2') || l.includes('second')) return 'Emily Davis';
         if (l.includes('successor')) return 'Michael Brown';
-        if (l.includes('child')) return CHILD_NAMES[index] ?? 'Amy Smith';
+        if (l.includes('child') || sec.includes('child')) return CHILD_NAMES[index] ?? 'Amy Smith';
         if (l.includes('alternate')) return 'Robert Brown';
         if (sec.includes('spouse') || l.includes('spouse')) return 'Sarah Johnson';
         if (sec.includes('healthcare') || l.includes('agent')) return 'Sarah Johnson';
@@ -35,7 +35,7 @@ function sampleValue(label, type, options, sectionTitle, index = 0) {
       if (l.includes('phone')) return l.includes('successor 2') ? '(555) 987-6543' : '(555) 123-4567';
       if (l.includes('address')) return '123 Elm Street, Springfield, IL 62701';
       if (l.includes('relationship')) return 'Spouse';
-      return 'Sample value';
+      return index > 0 ? `Sample value ${index + 1}` : 'Sample value';
   }
 }
 
@@ -53,7 +53,18 @@ function buildSampleAnswers(definition) {
       });
     }
     for (const q of section.questions || []) {
-      answers[q.id] = sampleValue(q.label, q.type, q.options, section.title);
+      if (q.type === 'repeatable') {
+        const count = /child|children/i.test(q.label) ? 4 : 1;
+        answers[q.id] = Array.from({ length: count }, (_, i) => {
+          const entry = {};
+          for (const f of q.fields || []) {
+            entry[f.id] = sampleValue(f.label, f.type, f.options, q.label, i);
+          }
+          return entry;
+        });
+      } else {
+        answers[q.id] = sampleValue(q.label, q.type, q.options, section.title);
+      }
     }
   }
   return answers;

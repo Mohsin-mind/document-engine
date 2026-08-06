@@ -114,30 +114,43 @@ function buildRenderContext(canonical, mappings) {
     ? mappings
     : Object.entries(mappings || {}).map(([docxTag, canonicalPath]) => ({ docxTag, canonicalPath }));
 
+  // Pass 1: scalar and loop mappings; record which docx loop tags each
+  // canonical array is mapped to.
+  const loopTagsByArray = {};
   for (const { docxTag, canonicalPath } of entries) {
     if (!canonicalPath) continue;
     if (isLoopPath(canonicalPath)) {
-      const value = getByPath(canonical, canonicalPath.slice(0, -2));
+      const arrayPath = canonicalPath.slice(0, -2);
+      const value = getByPath(canonical, arrayPath);
       setByPath(ctx, docxTag, Array.isArray(value) ? value : []);
+      (loopTagsByArray[arrayPath] = loopTagsByArray[arrayPath] || []).push(docxTag);
       continue;
     }
-    if (isItemPath(canonicalPath)) {
-      const [arrayPath, ...rest] = canonicalPath.split('[].');
-      const sub = rest.join('[].');
-      const array = getByPath(canonical, arrayPath);
-      const targetArray = getByPath(ctx, arrayPath);
-      if (Array.isArray(array) && Array.isArray(targetArray)) {
-        const itemKey = docxTag.split('.').pop();
-        array.forEach((item, i) => {
-          if (!targetArray[i]) return;
-          const value = getByPath(item, sub);
-          targetArray[i][itemKey] = value;
-        });
-      }
-      continue;
+    if (!isItemPath(canonicalPath)) {
+      const value = getByPath(canonical, canonicalPath);
+      if (value !== undefined) setByPath(ctx, docxTag, value);
     }
-    const value = getByPath(canonical, canonicalPath);
-    if (value !== undefined) setByPath(ctx, docxTag, value);
+  }
+
+  // Pass 2: item mappings write each canonical value into every docx loop
+  // array that maps from the same canonical array (the loop tag in the DOCX
+  // may differ from the canonical key, e.g. {#Children} <- children[]).
+  for (const { docxTag, canonicalPath } of entries) {
+    if (!canonicalPath || !isItemPath(canonicalPath)) continue;
+    const [arrayPath, ...rest] = canonicalPath.split('[].');
+    const sub = rest.join('[].');
+    const array = getByPath(canonical, arrayPath);
+    if (!Array.isArray(array)) continue;
+    const itemKey = docxTag.split('.').pop();
+    for (const loopTag of loopTagsByArray[arrayPath] || []) {
+      const target = getByPath(ctx, loopTag);
+      if (!Array.isArray(target)) continue;
+      array.forEach((item, i) => {
+        if (!target[i]) return;
+        const value = getByPath(item, sub);
+        target[i][itemKey] = value;
+      });
+    }
   }
   return ctx;
 }

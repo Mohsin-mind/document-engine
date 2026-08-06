@@ -445,6 +445,12 @@ export default function RulesEditorPage() {
     const out = [];
     for (const s of qsDef?.sections || []) {
       for (const q of s.questions || []) {
+        if (q.type === 'repeatable') {
+          for (const f of q.fields || []) {
+            out.push({ id: f.id, label: f.label, type: f.type, options: f.options });
+          }
+          continue;
+        }
         out.push({ id: q.id, label: q.label, type: q.type, options: q.options });
       }
       for (const f of s.repeatable?.fields || []) {
@@ -454,17 +460,45 @@ export default function RulesEditorPage() {
     return out;
   }, [qsDef]);
 
-  const qsGroups = useMemo(
-    () =>
-      (qsDef?.sections || [])
-        .filter((s) => s.repeatable)
-        .map((s) => ({
+  const qsGroups = useMemo(() => {
+    const out = [];
+    for (const s of qsDef?.sections || []) {
+      if (s.repeatable) {
+        out.push({
           id: s.repeatable.id,
           label: s.title || s.repeatable.label || s.repeatable.id,
           fields: s.repeatable.fields || [],
-        })),
-    [qsDef]
-  );
+        });
+      }
+      for (const q of s.questions || []) {
+        if (q.type === 'repeatable') {
+          out.push({ id: q.id, label: q.label || s.title || q.id, fields: q.fields || [] });
+        }
+      }
+    }
+    return out;
+  }, [qsDef]);
+
+  const qsRename = useMemo(() => {
+    const rename = {};
+    const listFields = {};
+    for (const s of qsDef?.sections || []) {
+      for (const q of s.questions || []) {
+        if (q.type === 'repeatable') {
+          rename[q.id] = q.label || s.title || q.id;
+          listFields[q.id] = Object.fromEntries((q.fields || []).map((f) => [f.id, f.label || f.id]));
+        } else {
+          rename[q.id] = q.label || q.id;
+        }
+      }
+      if (s.repeatable) {
+        const g = s.repeatable;
+        rename[g.id] = s.title || g.label || g.id;
+        listFields[g.id] = Object.fromEntries((g.fields || []).map((f) => [f.id, f.label || f.id]));
+      }
+    }
+    return { rename, listFields };
+  }, [qsDef]);
 
   useEffect(() => {
     if (data) {
@@ -772,21 +806,26 @@ export default function RulesEditorPage() {
         sections={[
           {
             title: qs ? qs.name : 'Answers',
-            rows: (qsDef?.sections || []).flatMap((s) => [
-              ...(s.repeatable
-                ? [{ label: `${s.repeatable.label} (list)`, id: s.repeatable.id, path: `answers.${s.repeatable.id}` }]
-                : []),
-              ...(s.questions || []).map((q) => ({
-                label: q.label || '(no question text)',
-                id: q.id,
-                path: `answers.${q.id}`,
-              })),
-              ...(s.repeatable?.fields || []).map((f) => ({
-                label: `${s.title || s.repeatable.label} → ${f.label}`,
-                id: f.id,
-                path: `item.${f.id}`,
-              })),
-            ]),
+            rows: (qsDef?.sections || []).flatMap((s) => {
+              const rows = [];
+              if (s.repeatable) {
+                rows.push({ label: `${s.repeatable.label} (list)`, id: s.repeatable.id, path: `answers.${s.repeatable.id}` });
+                for (const f of s.repeatable.fields || []) {
+                  rows.push({ label: `${s.title || s.repeatable.label} → ${f.label}`, id: f.id, path: `item.${f.id}` });
+                }
+              }
+              for (const q of s.questions || []) {
+                if (q.type === 'repeatable') {
+                  rows.push({ label: `${q.label} (list)`, id: q.id, path: `answers.${q.id}` });
+                  for (const f of q.fields || []) {
+                    rows.push({ label: `${q.label} → ${f.label}`, id: f.id, path: `item.${f.id}` });
+                  }
+                } else {
+                  rows.push({ label: q.label || '(no question text)', id: q.id, path: `answers.${q.id}` });
+                }
+              }
+              return rows;
+            }),
           },
           {
             title: 'Flags',
@@ -826,12 +865,20 @@ export default function RulesEditorPage() {
             <span className="text-xs text-amber-600">Link a question set above, then generate.</span>
           )}
         </div>
-        {sampleAnswers && <SampleTree value={sampleAnswers} title="Sample answers" />}
+        {sampleAnswers && (
+          <SampleTree
+            value={sampleAnswers}
+            title="Sample answers"
+            rename={qsRename.rename}
+            listFields={qsRename.listFields}
+          />
+        )}
         {canonical && (
           <SampleTree
             value={canonical}
             title="Output used by templates"
-            rename={Object.fromEntries(qsGroups.map((g) => [g.id, g.label]))}
+            rename={qsRename.rename}
+            listFields={qsRename.listFields}
           />
         )}
         <details className="group">

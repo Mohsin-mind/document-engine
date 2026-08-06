@@ -319,6 +319,55 @@ Tasks:
 
 ---
 
+### Phase 12 — Repeatable Section Definition Cleanup · [P1]
+
+> **Origin:** a section's "Repeatable group" checkbox and its `questions` list were mutually exclusive at render time only. The simulation renders a repeatable section as a table and silently ignores any regular questions (`repeatable ? table : questions`), but the editor still offered "+ Add question" and those questions were validated nowhere, yet still surfaced as pickable fields in the Rules editor. Fix = make the *model* exclusive, not just the renderer. **Note:** this phase was the stopgap; Phase 13 replaces the "section-level checkbox" approach with a repeatable-*question* type and obsoletes the hide/warn wiring below.
+
+Tasks (stopgap, shipped):
+
+- [x] P1 **Editor (`QuestionSetEditorPage.jsx`)**: hide "+ Add question" + warn on leftover questions when a section is a repeatable list. *(Super/fully superseded by Phase 13 — the checkbox is gone entirely.)*
+- [x] P1 **Backend guard** (`question-set.definition.js#validateQuestionSetDefinition`): a section with both `repeatable` and a non-empty `questions` list fails validation on create/update/publish. *(Kept in Phase 13 as the "legacy `section.repeatable` only with empty questions" rule.)*
+- [ ] P1 Confirming data hygiene: legacy dirty sections (questions + repeatable in one section) get migrated to a nested repeatable question on first edit (Phase 13 load normalization) — no manual copy needed.
+- [ ] P2 Toggle-guard note: legacy sections in the wild self-heal via the Phase 13 load-normalization on edit (no destructive auto-removal).
+
+**Exit criteria:** no dead fields can exist between the list and question views — a section either has one repeatable in its question list or no list at all (see Phase 13).
+
+---
+
+### Phase 13 — Repeatable as a First-Class Question (Dynamic Panel) · [P1]
+
+> **Origin:** Phase 12 fixed the bug but kept the limitation that a repeatable must be its own section — you can't ask "Children list" between "Are you married?" and "Do you own pets?" in one Family section. Adopt the SurveyJS Dynamic Panel model: **a repeatable is a question type nested in `section.questions`**; a section holds normal questions and at most one repeatable list, rendered in definition order. Answers stay `answers[<group id>] = [{...}]`, so the rule engine (`includeGroups`, `when.group`, `condition.group`, `groupMaps`), sample generation and template mappings (`children[].fullName`, docxtemplater loops) are **unchanged** — the group id simply moves from `section.repeatable.id` to the question's `id`.
+
+Tasks:
+
+- [x] P1 **Definition schema:** a question with `type: 'repeatable'` carries `label`, `addLabel`, `min`, `max`, `fields`; its `id` is the canonical group id.
+- [x] P1 **Backend validation** (`question-set.definition.js`): nested lists share the section-level list validator (unique ids incl. row fields, ≥ 1 field, labels + types + options); at most **one** repeatable per section; legacy `section.repeatable` still accepted only with empty `questions` (Phase 12 guard) and validated by the same code path. `collectQuestionIds` includes nested group + field ids.
+- [x] P1 **Admin editor** (`QuestionSetEditorPage.jsx`): the "Repeatable group" checkbox is removed; "+ Add list (repeatable)" adds a repeatable row next to "+ Add question"; the list editor (label, add-label, min/max, row fields with types/options/required, "show only if", advanced ids) lives inside the question row; legacy definitions are **normalized on load** into the nested shape (migration-by-edit — saving persists the new shape).
+- [x] P1 **Simulation** (`SimulationPage.jsx`): sections render questions and the inline list in definition order (legacy top-level `section.repeatable` sections still render via the old branch). Answer keys `answers[<id>]` and error keys `<id>[<ri>].<field>` are unchanged; repeatable rows can be conditioned ("show only if").
+- [x] P1 **Shared validation + sample generator:** repeatable questions validate rows and produce 4 sample rows for child lists — same behavior as the legacy block.
+- [x] P1 **Rules editor + template mapping:** `qsFields`, `qsGroups`, field-reference rows and the template rename map read both shapes (nested + legacy), so pickers, `includeGroups` checkboxes, group maps, `{item.X}` insertion and the `children[]` tree labels keep working with either shape.
+- [x] P1 **Seeder:** the `children` section migrated to a nested repeatable question; group id `children` preserved, so seeded rules (`hasChildren`, `includeGroups`, `groupMaps.children.fullName`) are untouched.
+- [ ] P2 Per-row conditional logic (`children[i].age < 18`) and list-aggregation rules ("any child under 18") — out of scope; the engine supports list-level counts only.
+
+**Exit criteria:** an admin builds a "Family" section mixing normal questions with a Children list in one screen and publishes it; the definition never stores the old dual-mode section shape; canonical JSON and template loops are byte-identical to before the refactor.
+
+---
+
+### Phase 14 — Template Mapping Consistency Fixes (render-context bug + human labels) · [P1]
+
+> **Origin:** admin review with a fresh question set + `simple.docx`: mapping `Child Full Name → <listId>[].name` passed validation but the render test failed with `[MISSING:Child Full Name]`; the tree also showed raw ids (`whatIsYourTrustName`, `name`) and full question text for list labels.
+
+Tasks:
+
+- [x] P1 **Render-context bug** (`render.context.js#buildRenderContext`): item-path mappings (`list[].field`) wrote the value into the *canonical* array instead of the *docx loop* array. A loop tag that differs from the canonical key (`{#Children}` ← `howManyChildren[]`) therefore rendered `[MISSING:Child Full Name]` inside the loop. Fixed with two passes: pass 1 applies scalar/loop mappings and records which docx tags map to each canonical array; pass 2 writes item values into every mapped docx loop array. Verified e2e against `simple.docx` (extract → validate → context → docxtemplater → zero `[MISSING]` markers) and the legacy `children`-named-loop case.
+- [x] P1 **Human labels everywhere** (`TemplateEditorPage.jsx`, `PathSelect.jsx`): the rename map now covers **all** question ids (scalar + repeatable) and passes per-list **row-field labels**; the tree and the mapping input display `What is your trust name?` and `How many childrens do you have?[].Child Full Name` instead of raw ids (`whatIsYourTrustName`, `name`). Typing human labels round-trips back to real canonical paths (`dehumanify`).
+- [x] P1 **Stale "mappings validated" gate**: `mappingGate` no longer trusts the server's `mapped-validated` flag after the admin edits a mapping (a `mappingDirty` flag forces re-validation before proceeding to the render test).
+- [ ] P2 Ambiguous-label collisions in the reverse map (two questions with identical labels) — picker still works; typed lookup resolves to the last match.
+
+**Exit criteria:** any docx loop tag can map to any canonical list (names differ) and still render item values; no raw question/field ids in the mapping tree or mapped-path display; a mapping edit forces re-validation.
+
+---
+
 ## 6. Priority Matrix
 
 | Feature | Phase | Priority |

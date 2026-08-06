@@ -12,6 +12,45 @@ import { FieldRenderer } from '../../components/inputs/FieldInput.jsx';
 import GenerationStatus from '../../components/simulation/GenerationStatus.jsx';
 import { Button, Alert, Loading } from '../../components/ui';
 
+function RepeatableBlock({ list, answers, errors, setGroupRow, addRow, removeRow }) {
+  return (
+    <div className="space-y-4">
+      <p className="text-xs text-gray-400">
+        Add one row per entry{list.min > 0 ? ` (at least ${list.min})` : ''}.
+      </p>
+      {(answers[list.id] || []).map((row, rowIndex) => (
+          <div key={rowIndex} className="rounded-md border border-gray-200 p-3 space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-medium text-gray-600">
+                {list.label} #{rowIndex + 1}
+              </span>
+              <Button
+                variant="link"
+                size="none"
+                onClick={() => removeRow(list.id, rowIndex)}
+                className="text-xs text-red-600"
+              >
+                Remove
+              </Button>
+            </div>
+            {list.fields.map((f) => (
+              <FieldRenderer
+                key={f.id}
+                field={f}
+                value={row[f.id]}
+                onChange={(v) => setGroupRow(list.id, rowIndex, f.id, v)}
+                error={errors[`${list.id}[${rowIndex}].${f.id}`]}
+              />
+            ))}
+          </div>
+        ))}
+      <Button variant="dashed" size="sm" onClick={() => addRow(list.id)}>
+        + {list.addLabel || `Add ${list.label.toLowerCase()}`}
+      </Button>
+    </div>
+  );
+}
+
 export default function SimulationPage() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -52,7 +91,12 @@ export default function SimulationPage() {
 
   const visibleQuestions = useMemo(() => {
     if (!current || current.repeatable) return [];
-    return (current.questions || []).filter((q) => conditionMatches(q.condition, answers));
+    return (current.questions || []).filter((q) => q.type !== 'repeatable' && conditionMatches(q.condition, answers));
+  }, [current, answers]);
+
+  const visibleLists = useMemo(() => {
+    if (!current || current.repeatable) return [];
+    return (current.questions || []).filter((q) => q.type === 'repeatable' && conditionMatches(q.condition, answers));
   }, [current, answers]);
 
   const completedSections = useMemo(() => {
@@ -171,37 +215,14 @@ export default function SimulationPage() {
         <h3 className="text-lg font-semibold mb-4">{current.title}</h3>
 
         {current.repeatable ? (
-          <div className="space-y-4">
-            {(answers[current.repeatable.id] || []).map((row, rowIndex) => (
-              <div key={rowIndex} className="rounded-md border border-gray-200 p-3 space-y-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium text-gray-600">
-                    {current.repeatable.label} #{rowIndex + 1}
-                  </span>
-                  <Button
-                    variant="link"
-                    size="none"
-                    onClick={() => removeRow(current.repeatable.id, rowIndex)}
-                    className="text-xs text-red-600"
-                  >
-                    Remove
-                  </Button>
-                </div>
-                {current.repeatable.fields.map((f) => (
-                  <FieldRenderer
-                    key={f.id}
-                    field={f}
-                    value={row[f.id]}
-                    onChange={(v) => setGroupRow(current.repeatable.id, rowIndex, f.id, v)}
-                    error={errors[`${current.repeatable.id}[${rowIndex}].${f.id}`]}
-                  />
-                ))}
-              </div>
-            ))}
-            <Button variant="dashed" size="sm" onClick={() => addRow(current.repeatable.id)}>
-              + {current.repeatable.addLabel || `Add ${current.repeatable.label.toLowerCase()}`}
-            </Button>
-          </div>
+          <RepeatableBlock
+            list={current.repeatable}
+            answers={answers}
+            errors={errors}
+            setGroupRow={setGroupRow}
+            addRow={addRow}
+            removeRow={removeRow}
+          />
         ) : (
           <div className="space-y-4">
             {visibleQuestions.map((q) => (
@@ -212,6 +233,18 @@ export default function SimulationPage() {
                 onChange={(v) => setAnswer(q.id, v)}
                 error={errors[q.id]}
               />
+            ))}
+            {visibleLists.map((q) => (
+              <div key={q.id} className="rounded-md border border-indigo-100 bg-indigo-50/40 p-4">
+                <RepeatableBlock
+                  list={q}
+                  answers={answers}
+                  errors={errors}
+                  setGroupRow={setGroupRow}
+                  addRow={addRow}
+                  removeRow={removeRow}
+                />
+              </div>
             ))}
           </div>
         )}

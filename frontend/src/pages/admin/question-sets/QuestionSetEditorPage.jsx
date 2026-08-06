@@ -21,6 +21,11 @@ const TYPE_META = {
   checkbox: { label: 'Checkbox', hint: 'Single tick box (e.g. “I have a will”)' },
 };
 
+const ROW_TYPE_META = {
+  ...TYPE_META,
+  repeatable: { label: 'Repeatable', hint: 'A list the customer can add rows to' },
+};
+
 function EqualsWidget({ field, value, onChange, placeholder }) {
   if (field?.type === 'dropdown') {
     return (
@@ -193,7 +198,7 @@ function FieldEditor({ field, onChange, onRemove, prefix, priorFields }) {
 }
 
 function QuestionRow({ question, open, onToggle, priorFields, children }) {
-  const meta = TYPE_META[question.type] || { label: question.type, hint: '' };
+  const meta = ROW_TYPE_META[question.type] || { label: question.type, hint: '' };
   const condField = question.condition?.field
     ? priorFields.find((f) => f.id === question.condition.field)
     : null;
@@ -229,9 +234,170 @@ function QuestionRow({ question, open, onToggle, priorFields, children }) {
   );
 }
 
-function SectionEditor({ section, onChange, onRemove, onAddQuestion, priorFields }) {
+function RepeatableEditor({ item, onChange, onRemove, priorFields }) {
+  const condField = priorFields.find((f) => f.id === item.condition?.field);
+  const setField = (index, updated) => {
+    const fields = [...item.fields];
+    fields[index] = updated;
+    onChange({ ...item, fields });
+  };
+  return (
+    <div className="rounded-md border border-indigo-100 bg-indigo-50/40 p-3 space-y-2">
+      <div className="grid grid-cols-6 gap-2 items-start">
+        <div className="col-span-3">
+          <label className="text-xs text-gray-500">List label</label>
+          <Input
+            size="field"
+            className="mt-0.5 w-full"
+            value={item.label}
+            onChange={(e) => onChange({ ...item, label: e.target.value })}
+            placeholder="e.g. Children"
+          />
+        </div>
+        <div className="col-span-2">
+          <label className="text-xs text-gray-500">Add-row button label</label>
+          <Input
+            size="field"
+            className="mt-0.5 w-full"
+            value={item.addLabel || ''}
+            onChange={(e) => onChange({ ...item, addLabel: e.target.value })}
+            placeholder="e.g. Add child"
+          />
+        </div>
+        <div className="col-span-1 flex items-end justify-end pb-0.5">
+          <Button variant="link" className="text-red-600" onClick={onRemove}>
+            Remove
+          </Button>
+        </div>
+      </div>
+
+      <div className="flex items-center gap-3 text-[11px] text-gray-500">
+        <span>min rows</span>
+        <Input
+          size="sm"
+          type="number"
+          className="w-16"
+          value={item.min}
+          onChange={(e) => onChange({ ...item, min: parseInt(e.target.value || '0', 10) })}
+        />
+        <span>max rows</span>
+        <Input
+          size="sm"
+          type="number"
+          className="w-16"
+          value={item.max}
+          onChange={(e) => onChange({ ...item, max: parseInt(e.target.value || '10', 10) })}
+        />
+      </div>
+
+      {priorFields.length > 0 && (
+        <div className="flex items-center gap-2">
+          <label className="text-xs text-gray-500 whitespace-nowrap">Show only if</label>
+          <Select
+            size="sm"
+            className="w-56"
+            value={item.condition?.field ?? ''}
+            onChange={(e) =>
+              onChange({
+                ...item,
+                condition: e.target.value
+                  ? { field: e.target.value, equals: item.condition?.equals ?? '' }
+                  : undefined,
+              })
+            }
+          >
+            <option value="">— always show —</option>
+            {priorFields.map((f) => (
+              <option key={f.id} value={f.id}>{f.label}</option>
+            ))}
+          </Select>
+          {item.condition?.field && (
+            <>
+              <span className="text-xs text-gray-500">equals</span>
+              <div className="w-40">
+                <EqualsWidget
+                  field={condField}
+                  value={item.condition?.equals}
+                  onChange={(v) => onChange({ ...item, condition: { ...item.condition, equals: v } })}
+                />
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
+      <div className="space-y-2">
+        <p className="text-xs font-semibold text-indigo-700 uppercase">Row fields</p>
+        {item.fields.map((f, i) => (
+          <div key={f._k || f.id} className="rounded-md border border-indigo-100 bg-white p-2 space-y-2">
+            <div className="grid grid-cols-6 gap-2 items-start">
+              <div className="col-span-3">
+                <label className="text-xs text-gray-500">Field label</label>
+                <Input
+                  size="sm"
+                  className="mt-0.5 w-full"
+                  value={f.label}
+                  onChange={(e) => setField(i, { ...f, label: e.target.value })}
+                  placeholder="e.g. Full name"
+                />
+              </div>
+              <div className="col-span-2">
+                <label className="text-xs text-gray-500">Answer type</label>
+                <Select
+                  size="sm"
+                  className="mt-0.5 w-full"
+                  value={f.type}
+                  onChange={(e) => setField(i, { ...f, type: e.target.value, options: undefined })}
+                >
+                  {Object.entries(TYPE_META).map(([value, t]) => (
+                    <option key={value} value={value}>{t.label}</option>
+                  ))}
+                </Select>
+              </div>
+              <div className="col-span-1 flex flex-col items-end gap-2 pt-5">
+                <label className="flex items-center gap-1 text-xs text-gray-600">
+                  <input
+                    type="checkbox"
+                    checked={!!f.required}
+                    onChange={(e) => setField(i, { ...f, required: e.target.checked })}
+                  />
+                  Required
+                </label>
+                <Button
+                  variant="link"
+                  className="text-red-600"
+                  onClick={() => onChange({ ...item, fields: item.fields.filter((_, j) => j !== i) })}
+                >
+                  Remove
+                </Button>
+              </div>
+            </div>
+            {f.type === 'dropdown' && (
+              <OptionsEditor
+                options={f.options || []}
+                onChange={(opts) => setField(i, { ...f, options: opts })}
+              />
+            )}
+            <AdvancedId id={f.id} />
+          </div>
+        ))}
+        <Button
+          variant="dashedIndigo"
+          size="xs"
+          onClick={() =>
+            onChange({ ...item, fields: [...item.fields, { id: uid(), label: 'Field', type: 'text', required: false }] })
+          }
+        >
+          + Add field
+        </Button>
+        <AdvancedId id={item.id} />
+      </div>
+    </div>
+  );
+}
+
+function SectionEditor({ section, onChange, onRemove, onAddQuestion, onAddList, priorFields }) {
   const [openQ, setOpenQ] = useState(null);
-  const [repOpen, setRepOpen] = useState(false);
   const prevCount = useRef((section.questions || []).length);
   useEffect(() => {
     const n = (section.questions || []).length;
@@ -247,13 +413,6 @@ function SectionEditor({ section, onChange, onRemove, onAddQuestion, priorFields
     onChange({ ...section, questions: section.questions.filter((_, i) => i !== index) });
   };
 
-  const rep = section.repeatable;
-  const setRep = (updated) => onChange({ ...section, repeatable: updated });
-  const setRepField = (index, updated) => {
-    const fields = [...rep.fields];
-    fields[index] = updated;
-    setRep({ ...rep, fields });
-  };
   const priorBeforeSection = priorFields;
   const questionPrior = (i) => [
     ...priorBeforeSection,
@@ -275,27 +434,6 @@ function SectionEditor({ section, onChange, onRemove, onAddQuestion, priorFields
           className="flex-1 font-medium"
           placeholder="Section title (e.g. Grantor details)"
         />
-        <label className="flex items-center gap-1 text-xs text-gray-600">
-          <input
-            type="checkbox"
-            checked={!!rep}
-            onChange={(e) => {
-              if (e.target.checked) {
-                setRep({
-                  id: uid(),
-                  label: 'Item',
-                  addLabel: 'Add item',
-                  min: 0,
-                  max: 10,
-                  fields: [{ id: uid(), label: 'Name', type: 'text', required: true }],
-                });
-              } else {
-                setRep(undefined);
-              }
-            }}
-          />
-          Repeatable group
-        </label>
         <Button variant="link" className="text-sm text-red-600" onClick={onRemove}>
           Remove section
         </Button>
@@ -313,130 +451,33 @@ function SectionEditor({ section, onChange, onRemove, onAddQuestion, priorFields
             onToggle={() => setOpenQ(openQ === i ? null : i)}
             priorFields={questionPrior(i)}
           >
-            <FieldEditor
-              prefix="q"
-              field={q}
-              priorFields={questionPrior(i)}
-              onChange={(f) => setField(i, f)}
-              onRemove={() => removeField(i)}
-            />
+            {q.type === 'repeatable' ? (
+              <RepeatableEditor
+                item={q}
+                priorFields={questionPrior(i)}
+                onChange={(f) => setField(i, f)}
+                onRemove={() => removeField(i)}
+              />
+            ) : (
+              <FieldEditor
+                prefix="q"
+                field={q}
+                priorFields={questionPrior(i)}
+                onChange={(f) => setField(i, f)}
+                onRemove={() => removeField(i)}
+              />
+            )}
           </QuestionRow>
         ))}
-        <Button variant="dashed" size="sm" onClick={onAddQuestion}>
-          + Add question
-        </Button>
-      </div>
-
-      {rep && (
-        <div className="rounded-md border border-indigo-100 bg-indigo-50/50 p-3">
-          <Collapsible
-            open={repOpen}
-            onToggle={() => setRepOpen(!repOpen)}
-            header={
-              <>
-                <span className="text-xs font-semibold text-indigo-700 uppercase">
-                  Repeatable list
-                </span>
-                <span className="rounded bg-indigo-100 px-1.5 py-0.5 text-[11px] text-indigo-700">
-                  {rep.label}
-                </span>
-              </>
-            }
-          >
-            <div className="mt-2 space-y-2">
-              <div className="flex items-center gap-2">
-                <label className="text-[11px] text-gray-500 whitespace-nowrap">List label</label>
-                <Input
-                  size="sm"
-                  className="w-48"
-                  value={rep.label}
-                  onChange={(e) => setRep({ ...rep, label: e.target.value })}
-                  placeholder="list label (e.g. Children)"
-                />
-            <div className="ml-auto flex items-center gap-2 text-[11px] text-gray-500">
-              <span>min</span>
-              <Input
-                size="sm"
-                type="number"
-                className="w-14"
-                value={rep.min}
-                onChange={(e) => setRep({ ...rep, min: parseInt(e.target.value || '0', 10) })}
-              />
-              <span>max</span>
-              <Input
-                size="sm"
-                type="number"
-                className="w-14"
-                value={rep.max}
-                onChange={(e) => setRep({ ...rep, max: parseInt(e.target.value || '10', 10) })}
-              />
-            </div>
-            <AdvancedId id={rep.id} />
-          </div>
-          <div className="space-y-2">
-            {rep.fields.map((f, i) => (
-              <div key={f._k || f.id} className="rounded-md border border-indigo-100 bg-white p-2 space-y-2">
-                <div className="grid grid-cols-6 gap-2 items-start">
-                  <div className="col-span-3">
-                    <Input
-                      size="sm"
-                      className="w-full"
-                      value={f.label}
-                      onChange={(e) => setRepField(i, { ...f, label: e.target.value })}
-                      placeholder="field label (e.g. Full name)"
-                    />
-                  </div>
-                  <div className="col-span-2">
-                    <Select
-                      size="sm"
-                      className="w-full"
-                      value={f.type}
-                      onChange={(e) => setRepField(i, { ...f, type: e.target.value, options: undefined })}
-                    >
-                      {Object.entries(TYPE_META).map(([value, t]) => (
-                        <option key={value} value={value}>{t.label}</option>
-                      ))}
-                    </Select>
-                  </div>
-                  <div className="col-span-1 flex justify-end">
-                    <Button
-                      variant="link"
-                      className="text-red-600"
-                      onClick={() => setRep({ ...rep, fields: rep.fields.filter((_, j) => j !== i) })}
-                    >
-                      Remove
-                    </Button>
-                  </div>
-                </div>
-                {f.type === 'dropdown' && (
-                  <OptionsEditor
-                    options={f.options || []}
-                    onChange={(opts) => setRepField(i, { ...f, options: opts })}
-                  />
-                )}
-                <AdvancedId id={f.id} />
-              </div>
-            ))}
-            <Button
-              variant="dashedIndigo"
-              size="xs"
-              onClick={() =>
-                setRep({
-                  ...rep,
-                  fields: [
-                    ...rep.fields,
-                    { id: uid(), label: 'Field', type: 'text', required: false },
-                  ],
-                })
-              }
-            >
-              + Add field
-            </Button>
-          </div>
+        <div className="flex gap-2">
+          <Button variant="dashed" size="sm" onClick={onAddQuestion}>
+            + Add question
+          </Button>
+          <Button variant="dashedIndigo" size="sm" onClick={onAddList}>
+            + Add list (repeatable)
+          </Button>
         </div>
-        </Collapsible>
       </div>
-      )}
     </div>
   );
 }
@@ -460,13 +501,22 @@ export default function QuestionSetEditorPage() {
     if (data) {
       const latest = data.latestVersion || data.versions?.[0] || null;
       const def = latest?.definition;
-      const sections = (def?.sections || []).map((s) => ({
-        ...s,
-        questions: s.questions || [],
-        repeatable: s.repeatable
-          ? { ...s.repeatable, fields: s.repeatable.fields || [] }
-          : undefined,
-      }));
+      const sections = (def?.sections || []).map((s) => {
+        const questions = [...(s.questions || [])];
+        if (s.repeatable) {
+          questions.push({
+            _k: uid(),
+            id: s.repeatable.id,
+            type: 'repeatable',
+            label: s.repeatable.label || 'List',
+            addLabel: s.repeatable.addLabel,
+            min: s.repeatable.min ?? 0,
+            max: s.repeatable.max ?? 10,
+            fields: s.repeatable.fields || [],
+          });
+        }
+        return { ...s, questions };
+      });
       setName(data.name);
       setDescription(data.description || '');
       setDefinition(def ? { ...def, sections } : null);
@@ -515,9 +565,15 @@ export default function QuestionSetEditorPage() {
     const out = [];
     definition.sections.forEach((section, si) => {
       if (si >= sectionIndex) return;
-      (section.questions || []).forEach((q) =>
-        out.push({ id: q.id, label: q.label, type: q.type, options: q.options })
-      );
+      (section.questions || []).forEach((q) => {
+        if (q.type === 'repeatable') {
+          (q.fields || []).forEach((f) =>
+            out.push({ id: f.id, label: f.label, type: f.type, options: f.options })
+          );
+        } else {
+          out.push({ id: q.id, label: q.label, type: q.type, options: q.options });
+        }
+      });
       if (section.repeatable) {
         (section.repeatable.fields || []).forEach((f) =>
           out.push({ id: f.id, label: f.label, type: f.type, options: f.options })
@@ -581,6 +637,26 @@ export default function QuestionSetEditorPage() {
               };
               setDefinition({ ...definition, sections });
             }}
+            onAddList={() => {
+              const sections = [...definition.sections];
+              sections[i] = {
+                ...section,
+                questions: [
+                  ...(section.questions || []),
+                  {
+                    _k: uid(),
+                    id: uid(),
+                    type: 'repeatable',
+                    label: 'New list',
+                    addLabel: 'Add item',
+                    min: 0,
+                    max: 10,
+                    fields: [{ id: uid(), label: 'Name', type: 'text', required: false }],
+                  },
+                ],
+              };
+              setDefinition({ ...definition, sections });
+            }}
           />
         ))}
         <Button
@@ -624,7 +700,12 @@ export default function QuestionSetEditorPage() {
             ...(s.repeatable
               ? [{ label: `${s.repeatable.label} (list)`, id: s.repeatable.id, path: `answers.${s.repeatable.id}` }]
               : []),
-            ...(s.questions || []).map((q) => ({
+            ...(s.questions || []).filter((q) => q.type === 'repeatable').map((q) => ({
+              label: `${q.label} (list)`,
+              id: q.id,
+              path: `answers.${q.id}`,
+            })),
+            ...(s.questions || []).filter((q) => q.type !== 'repeatable').map((q) => ({
               label: q.label || '(no question text)',
               id: q.id,
               path: `answers.${q.id}`,

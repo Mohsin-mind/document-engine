@@ -78,36 +78,42 @@ function validateField(field, value, answers, errors, path) {
   }
 }
 
+function validateRepeatable(list, rows, answers, errors) {
+  if (list.condition && !conditionMatches(list.condition, answers)) return;
+  if (list.min && (!Array.isArray(rows) || rows.length < list.min)) {
+    errors.push({ path: list.id, message: `Add at least ${list.min} ${list.label.toLowerCase()}(s)` });
+    return;
+  }
+  if (isEmptyValue(rows)) return;
+  if (!Array.isArray(rows)) {
+    errors.push({ path: list.id, message: `${list.label} entries must be a list` });
+    return;
+  }
+  if (list.max !== undefined && rows.length > list.max) {
+    errors.push({ path: list.id, message: `At most ${list.max} ${list.label.toLowerCase()}(s) allowed` });
+  }
+  rows.forEach((row, ri) => {
+    for (const f of list.fields || []) {
+      validateField(f, row[f.id], row, errors, `${list.id}[${ri}].${f.id}`);
+    }
+  });
+}
+
 export function validateAnswers(definition, answers) {
   const errors = [];
 
   for (const section of definition.sections || []) {
     if (section.questions) {
       for (const q of section.questions) {
-        validateField(q, answers[q.id], answers, errors, q.id);
+        if (q.type === 'repeatable') {
+          validateRepeatable(q, answers[q.id], answers, errors);
+        } else {
+          validateField(q, answers[q.id], answers, errors, q.id);
+        }
       }
     }
     if (section.repeatable) {
-      const r = section.repeatable;
-      const rows = answers[r.id];
-      if (r.min && (!Array.isArray(rows) || rows.length < r.min)) {
-        errors.push({ path: r.id, message: `Add at least ${r.min} ${r.label.toLowerCase()}(s)` });
-        continue;
-      }
-      if (!isEmptyValue(rows)) {
-        if (!Array.isArray(rows)) {
-          errors.push({ path: r.id, message: `${r.label} entries must be a list` });
-          continue;
-        }
-        if (r.max !== undefined && rows.length > r.max) {
-          errors.push({ path: r.id, message: `At most ${r.max} ${r.label.toLowerCase()}(s) allowed` });
-        }
-        rows.forEach((row, ri) => {
-          for (const f of r.fields || []) {
-            validateField(f, row[f.id], row, errors, `${r.id}[${ri}].${f.id}`);
-          }
-        });
-      }
+      validateRepeatable(section.repeatable, answers[section.repeatable.id], answers, errors);
     }
   }
   return { valid: errors.length === 0, errors };

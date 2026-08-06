@@ -93,6 +93,7 @@ export default function TemplateEditorPage() {
   const [editedTags, setEditedTags] = useState({});
   const [validation, setValidation] = useState(null);
   const [savedOk, setSavedOk] = useState(false);
+  const [mappingDirty, setMappingDirty] = useState(false);
   const [testPassed, setTestPassed] = useState(false);
   const [boundQsId, setBoundQsId] = useState(null);
   const [sampleJsonOpen, setSampleJsonOpen] = useState(false);
@@ -118,13 +119,25 @@ export default function TemplateEditorPage() {
   const rename = useMemo(() => {
     const def = boundQs?.latestVersion?.definition;
     const out = {};
+    const listFields = {};
     for (const s of def?.sections || []) {
-      if (s.repeatable) out[s.repeatable.id] = s.title || s.repeatable.label || s.repeatable.id;
+      for (const q of s.questions || []) {
+        out[q.id] = q.label || s.title || q.id;
+        if (q.type === 'repeatable') {
+          listFields[q.id] = Object.fromEntries((q.fields || []).map((f) => [f.id, f.label || f.id]));
+        }
+      }
+      if (s.repeatable) {
+        out[s.repeatable.id] = s.title || s.repeatable.label || s.repeatable.id;
+        listFields[s.repeatable.id] = Object.fromEntries(
+          (s.repeatable.fields || []).map((f) => [f.id, f.label || f.id])
+        );
+      }
     }
-    return out;
+    return { out, listFields };
   }, [boundQs]);
 
-  const displayPath = (p) => p.replace(/^([^.]+)/, (m) => rename[m] || m);
+  const displayPath = (p) => p.replace(/^([^.]+)/, (m) => rename.out[m] || m);
 
   const bindMut = useMutation({
     mutationFn: (questionSetId) => updateTemplate(id, { questionSetId }),
@@ -188,6 +201,7 @@ export default function TemplateEditorPage() {
       setValidation(saved.validation || null);
       const ok = (saved.validation || []).length > 0 && saved.validation.every((r) => r.ok);
       setSavedOk(ok);
+      setMappingDirty(false);
       setNotice(ok ? 'Mappings saved and validated' : 'Mappings saved with warnings');
     },
     onError: (e) => setError(e.message),
@@ -261,7 +275,7 @@ export default function TemplateEditorPage() {
   if (!v) return <Loading>No version</Loading>;
 
   const mappedCount = variables.filter((x) => x.jsonPath || mappings?.[x.name]).length;
-  const mappingGate = savedOk || v.mappingStatus === 'mapped-validated';
+  const mappingGate = savedOk || (v.mappingStatus === 'mapped-validated' && !mappingDirty);
   const testGate = testPassed || (v.docxTestStatus === 'passed' && v.pdfTestStatus === 'passed');
 
   const stepMeta = [
@@ -276,6 +290,7 @@ export default function TemplateEditorPage() {
     if (!fromSuggestion) setEditedTags({ ...editedTags, [tag]: true });
     setValidation(null);
     setSavedOk(false);
+    setMappingDirty(true);
   };
 
   return (
@@ -450,7 +465,8 @@ export default function TemplateEditorPage() {
                       onChange={(p) => setPath(tag, p, false)}
                       paths={paths}
                       canonical={sampleCanonical}
-                      rename={rename}
+                      rename={rename.out}
+                      listFields={rename.listFields}
                     />
                     {suggestion && !path && (
                       <button

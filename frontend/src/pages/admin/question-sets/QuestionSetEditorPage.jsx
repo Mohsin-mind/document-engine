@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { useParams } from 'react-router-dom';
 import {
@@ -11,6 +11,76 @@ import Collapsible from '../../../components/Collapsible.jsx';
 import { PageScaffold, Button, Alert, StatusBadge, Input, Select, Loading } from '../../../components/ui';
 
 const uid = () => `q${Math.random().toString(36).slice(2, 8)}`;
+
+function slugify(label) {
+  return (
+    String(label || '')
+      .toLowerCase()
+      .normalize('NFKD')
+      .replace(/[^a-z0-9\s]/g, ' ')
+      .trim()
+      .split(/\s+/)
+      .filter(Boolean)
+      .map((w, i) => (i === 0 ? w : w.charAt(0).toUpperCase() + w.slice(1)))
+      .join('') || 'key'
+  );
+}
+
+function uniqueId(base, taken) {
+  const root = slugify(base);
+  if (!taken.has(root)) return root;
+  let n = 2;
+  while (taken.has(`${root}${n}`)) n += 1;
+  return `${root}${n}`;
+}
+
+function relabeled(obj, label, takenIds) {
+  const next = { ...obj, label };
+  if (obj._auto && String(label).trim()) {
+    const taken = new Set(takenIds);
+    taken.delete(obj.id);
+    next.id = uniqueId(label, taken);
+  }
+  return next;
+}
+
+function stripClientMeta(definition) {
+  const clean = { ...definition, sections: (definition.sections || []).map((s) => {
+    const sc = { ...s };
+    delete sc._k;
+    delete sc._auto;
+    sc.questions = (s.questions || []).map((q) => {
+      const qc = { ...q };
+      delete qc._k;
+      delete qc._auto;
+      if (Array.isArray(qc.fields)) {
+        qc.fields = qc.fields.map((f) => {
+          const fc = { ...f };
+          delete fc._k;
+          delete fc._auto;
+          return fc;
+        });
+      }
+      return qc;
+    });
+    if (s.repeatable) {
+      const rc = { ...s.repeatable };
+      delete rc._k;
+      delete rc._auto;
+      rc.fields = (rc.fields || []).map((f) => {
+        const fc = { ...f };
+        delete fc._k;
+        delete fc._auto;
+        return fc;
+      });
+      sc.repeatable = rc;
+    } else {
+      delete sc.repeatable;
+    }
+    return sc;
+  })};
+  return clean;
+}
 
 const TYPE_META = {
   text: { label: 'Text', hint: 'Short free-text answer (name, address, …)' },
@@ -57,16 +127,31 @@ function EqualsWidget({ field, value, onChange, placeholder }) {
   );
 }
 
-function AdvancedId({ id }) {
+function AdvancedId({ value, onChange, editable }) {
   return (
     <details className="group">
       <summary className="cursor-pointer text-[11px] text-gray-400 hover:text-gray-600">
         Advanced
       </summary>
       <div className="mt-1 flex items-center gap-2 text-[11px] text-gray-500">
-        <span>Internal ID:</span>
-        <code className="rounded bg-gray-100 px-1.5 py-0.5 font-mono text-[11px]">{id}</code>
-        <span>Used by rules and templates — not editable.</span>
+        <span>Internal key:</span>
+        {editable ? (
+          <>
+            <Input
+              size="sm"
+              className="w-56 font-mono"
+              value={value || ''}
+              onChange={(e) => onChange(e.target.value)}
+              placeholder="key"
+            />
+            <span>Used by rules and templates — locked after the first publish.</span>
+          </>
+        ) : (
+          <>
+            <code className="rounded bg-gray-100 px-1.5 py-0.5 font-mono text-[11px]">{value}</code>
+            <span>Used by rules and templates — locked after publish.</span>
+          </>
+        )}
       </div>
     </details>
   );
@@ -102,7 +187,7 @@ function OptionsEditor({ options, onChange }) {
   );
 }
 
-function FieldEditor({ field, onChange, onRemove, prefix, priorFields }) {
+function FieldEditor({ field, onChange, onRemove, prefix, priorFields, takenIds, editable }) {
   const meta = TYPE_META[field.type] || { label: field.type, hint: '' };
   const condField = priorFields.find((f) => f.id === field.condition?.field);
   return (
@@ -114,7 +199,7 @@ function FieldEditor({ field, onChange, onRemove, prefix, priorFields }) {
             size="field"
             className="mt-0.5 w-full"
             value={field.label}
-            onChange={(e) => onChange({ ...field, label: e.target.value })}
+            onChange={(e) => onChange(relabeled(field, e.target.value, takenIds))}
             placeholder="e.g. Full legal name"
           />
         </div>
@@ -195,7 +280,11 @@ function FieldEditor({ field, onChange, onRemove, prefix, priorFields }) {
         />
       )}
 
-      <AdvancedId id={field.id} />
+      <AdvancedId
+        value={field.id}
+        editable={editable}
+        onChange={(v) => onChange({ ...field, id: v, _auto: false })}
+      />
     </div>
   );
 }
@@ -237,7 +326,7 @@ function QuestionRow({ question, open, onToggle, priorFields, children }) {
   );
 }
 
-function RepeatableEditor({ item, onChange, onRemove, priorFields }) {
+function RepeatableEditor({ item, onChange, onRemove, priorFields, takenIds, editable }) {
   const condField = priorFields.find((f) => f.id === item.condition?.field);
   const setField = (index, updated) => {
     const fields = [...item.fields];
@@ -253,7 +342,7 @@ function RepeatableEditor({ item, onChange, onRemove, priorFields }) {
             size="field"
             className="mt-0.5 w-full"
             value={item.label}
-            onChange={(e) => onChange({ ...item, label: e.target.value })}
+            onChange={(e) => onChange(relabeled(item, e.target.value, takenIds))}
             placeholder="e.g. Children"
           />
         </div>
@@ -343,7 +432,7 @@ function RepeatableEditor({ item, onChange, onRemove, priorFields }) {
                   size="sm"
                   className="mt-0.5 w-full"
                   value={f.label}
-                  onChange={(e) => setField(i, { ...f, label: e.target.value })}
+                  onChange={(e) => setField(i, relabeled(f, e.target.value, takenIds))}
                   placeholder="e.g. Full name"
                 />
               </div>
@@ -384,25 +473,38 @@ function RepeatableEditor({ item, onChange, onRemove, priorFields }) {
                 onChange={(opts) => setField(i, { ...f, options: opts })}
               />
             )}
-            <AdvancedId id={f.id} />
+            <AdvancedId
+              value={f.id}
+              editable={editable}
+              onChange={(v) => setField(i, { ...f, id: v, _auto: false })}
+            />
           </div>
         ))}
         <Button
           variant="dashedIndigo"
           size="xs"
-          onClick={() =>
-            onChange({ ...item, fields: [...item.fields, { id: uid(), label: 'Field', type: 'text', required: false }] })
-          }
+          onClick={() => {
+            const taken = new Set(takenIds);
+            taken.delete(item.id);
+            onChange({
+              ...item,
+              fields: [...item.fields, { _auto: true, id: uniqueId('Field', taken), label: 'Field', type: 'text', required: false }],
+            });
+          }}
         >
           + Add field
         </Button>
-        <AdvancedId id={item.id} />
+        <AdvancedId
+          value={item.id}
+          editable={editable}
+          onChange={(v) => onChange({ ...item, id: v, _auto: false })}
+        />
       </div>
     </div>
   );
 }
 
-function SectionEditor({ section, onChange, onRemove, onAddQuestion, onAddList, priorFields }) {
+function SectionEditor({ section, onChange, onRemove, onAddQuestion, onAddList, priorFields, takenIds, locked }) {
   const [openQ, setOpenQ] = useState(null);
   const prevCount = useRef((section.questions || []).length);
   useEffect(() => {
@@ -461,6 +563,8 @@ function SectionEditor({ section, onChange, onRemove, onAddQuestion, onAddList, 
               <RepeatableEditor
                 item={q}
                 priorFields={questionPrior(i)}
+                takenIds={takenIds}
+                editable={!locked}
                 onChange={(f) => setField(i, f)}
                 onRemove={() => removeField(i)}
               />
@@ -469,6 +573,8 @@ function SectionEditor({ section, onChange, onRemove, onAddQuestion, onAddList, 
                 prefix="q"
                 field={q}
                 priorFields={questionPrior(i)}
+                takenIds={takenIds}
+                editable={!locked}
                 onChange={(f) => setField(i, f)}
                 onRemove={() => removeField(i)}
               />
@@ -556,6 +662,21 @@ export default function QuestionSetEditorPage() {
     onError: (e) => setError(e.message),
   });
 
+  const takenIds = useMemo(() => {
+    const set = new Set();
+    for (const s of definition?.sections || []) {
+      for (const q of s.questions || []) {
+        if (q.id) set.add(q.id);
+        for (const f of q.fields || []) if (f.id) set.add(f.id);
+      }
+      for (const f of s.repeatable?.fields || []) if (f.id) set.add(f.id);
+      if (s.repeatable?.id) set.add(s.repeatable.id);
+    }
+    return set;
+  }, [definition]);
+
+  const locked = useMemo(() => versions.some((v) => v.status === 'published'), [versions]);
+
   if (isLoading || !definition) return <Loading />;
   if (isError) {
     return <Alert variant="error">Failed to load question set: {queryError?.message}</Alert>;
@@ -589,13 +710,16 @@ export default function QuestionSetEditorPage() {
     return out;
   };
 
+  const handleSave = () =>
+    saveMut.mutate({ name, description, definition: stripClientMeta(definition) });
+
   return (
     <PageScaffold
       title="Edit Question Set"
       actions={
         <>
           <StatusBadge status={status} size="md" />
-          <Button onClick={() => saveMut.mutate({ name, description, definition })} disabled={saveMut.isPending} size="lg">
+          <Button onClick={handleSave} disabled={saveMut.isPending} size="lg">
             {saveMut.isPending ? 'Saving…' : 'Save Draft'}
           </Button>
           <Button variant="success" onClick={() => publishMut.mutate()} disabled={publishMut.isPending} size="lg">
@@ -627,6 +751,8 @@ export default function QuestionSetEditorPage() {
             key={section.id || i}
             section={section}
             priorFields={priorFieldsFor(i)}
+            takenIds={takenIds}
+            locked={locked}
             onChange={(s) => setSection(i, s)}
             onRemove={() => {
               const sections = definition.sections.filter((_, j) => j !== i);
@@ -638,26 +764,30 @@ export default function QuestionSetEditorPage() {
                 ...section,
                 questions: [
                   ...(section.questions || []),
-                  { _k: uid(), id: uid(), label: 'New question', type: 'text', required: false },
+                  { _k: uid(), _auto: true, id: uniqueId('New question', takenIds), label: 'New question', type: 'text', required: false },
                 ],
               };
               setDefinition({ ...definition, sections });
             }}
             onAddList={() => {
               const sections = [...definition.sections];
+              const listId = uniqueId('New list', takenIds);
+              const fieldTaken = new Set(takenIds);
+              fieldTaken.add(listId);
               sections[i] = {
                 ...section,
                 questions: [
                   ...(section.questions || []),
                   {
                     _k: uid(),
-                    id: uid(),
+                    _auto: true,
+                    id: listId,
                     type: 'repeatable',
                     label: 'New list',
                     addLabel: 'Add item',
                     min: 0,
                     max: 10,
-                    fields: [{ id: uid(), label: 'Name', type: 'text', required: false }],
+                    fields: [{ _auto: true, id: uniqueId('Name', fieldTaken), label: 'Name', type: 'text', required: false }],
                   },
                 ],
               };

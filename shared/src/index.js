@@ -5,7 +5,9 @@ export function isEmptyValue(value) {
 export function conditionMatches(condition, answers) {
   if (!condition) return true;
   if (condition.field !== undefined) {
-    return String(answers[condition.field] ?? '') === String(condition.equals);
+    const equals = String(condition.equals ?? '');
+    if (equals === '') return false;
+    return String(answers[condition.field] ?? '') === equals;
   }
   if (condition.group !== undefined) {
     const rows = answers[condition.group];

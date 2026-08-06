@@ -592,25 +592,6 @@ export default function RulesEditorPage() {
         </Alert>
       )}
 
-      <div className="flex items-center gap-3">
-        <Button
-          variant="indigo"
-          size="md"
-          onClick={() => {
-            setError('');
-            setNotice('');
-            genSampleMut.mutate();
-          }}
-          disabled={genSampleMut.isPending || !data?.questionSetId}
-          title={data?.questionSetId ? '' : 'Link a question set to generate a sample'}
-        >
-          {genSampleMut.isPending ? 'Generating…' : 'Generate sample'}
-        </Button>
-        {!data?.questionSetId && (
-          <span className="text-xs text-amber-600">Link a question set above, then generate.</span>
-        )}
-      </div>
-
       <div className="rounded-lg border border-gray-200 bg-white p-4 space-y-3">
         <p className="text-sm font-semibold text-gray-700">Flags (true / false facts)</p>
         <p className="text-xs text-gray-500">

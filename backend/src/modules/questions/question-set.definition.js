@@ -79,6 +79,50 @@ function validateRepeatable(list, seen, seenAt, errors, ref) {
 const typeName = (t) =>
   ({ text: 'Text', number: 'Number', date: 'Date', dropdown: 'Dropdown', yesno: 'Yes / No', checkbox: 'Checkbox' })[t] || t;
 
+function stripClientMeta(definition) {
+  const cleanSection = (s) => {
+    const sc = { ...s };
+    delete sc._k;
+    delete sc._auto;
+    sc.questions = (s.questions || []).map((q) => {
+      const qc = { ...q };
+      delete qc._k;
+      delete qc._auto;
+      if (Array.isArray(qc.fields)) {
+        qc.fields = qc.fields.map((f) => {
+          const fc = { ...f };
+          delete fc._k;
+          delete fc._auto;
+          return fc;
+        });
+      }
+      return qc;
+    });
+    if (s.repeatable) {
+      const rc = { ...s.repeatable };
+      delete rc._k;
+      delete rc._auto;
+      rc.fields = (rc.fields || []).map((f) => {
+        const fc = { ...f };
+        delete fc._k;
+        delete fc._auto;
+        return fc;
+      });
+      sc.repeatable = rc;
+    } else {
+      delete sc.repeatable;
+    }
+    return sc;
+  };
+  return { ...definition, sections: (definition.sections || []).map(cleanSection) };
+}
+
+function missingKeys(publishedDefinition, nextDefinition) {
+  const published = new Set(collectQuestionIds(publishedDefinition || {}));
+  const next = new Set(collectQuestionIds(nextDefinition || {}));
+  return [...published].filter((id) => !next.has(id));
+}
+
 function validateQuestionSetDefinition(definition) {
   const errors = [];
 
@@ -150,4 +194,10 @@ function validateQuestionSetDefinition(definition) {
   return { valid: errors.length === 0, errors };
 }
 
-module.exports = { validateQuestionSetDefinition, QUESTION_TYPES, collectQuestionIds };
+module.exports = {
+  validateQuestionSetDefinition,
+  QUESTION_TYPES,
+  collectQuestionIds,
+  stripClientMeta,
+  missingKeys,
+};

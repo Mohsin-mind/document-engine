@@ -1,6 +1,24 @@
 const { QuestionSet, QuestionSetVersion } = require('../../db');
 const { NotFoundError, ValidationError, ConflictError } = require('../../common/errors');
-const { validateQuestionSetDefinition } = require('./question-set.definition');
+const { validateQuestionSetDefinition, stripClientMeta, missingKeys } = require('./question-set.definition');
+
+async function assertKeysPreserved(questionSetId, nextDefinition) {
+  const published = await QuestionSetVersion.findOne({
+    where: { questionSetId, status: 'published' },
+    order: [['versionNo', 'DESC']],
+  });
+  if (!published) return;
+  const missing = missingKeys(published.definition, nextDefinition);
+  if (missing.length > 0) {
+    throw new ValidationError(
+      'Question keys are locked after publish',
+      missing.map(
+        (id) =>
+          `"${id}" was removed or renamed — published rules and template mappings reference question keys. Add a new question with a new key instead.`
+      )
+    );
+  }
+}
 
 function toDto(questionSet) {
   return {
@@ -52,7 +70,8 @@ async function getQuestionSet(id) {
 
 async function createQuestionSet({ name, description, definition }) {
   if (!name || !name.trim()) throw new ValidationError('name is required');
-  const check = validateQuestionSetDefinition(definition);
+  const clean = stripClientMeta(definition);
+  const check = validateQuestionSetDefinition(clean);
   if (!check.valid) throw new ValidationError('Invalid question set definition', check.errors);
 
   const set = await QuestionSet.create({ name: name.trim(), description: description || null, status: 'draft' });
@@ -60,7 +79,7 @@ async function createQuestionSet({ name, description, definition }) {
     questionSetId: set.id,
     versionNo: 1,
     status: 'draft',
-    definition,
+    definition: clean,
   });
   await set.update({ latestVersionId: version.id });
   return getQuestionSet(set.id);
@@ -70,9 +89,11 @@ async function updateDraft(id, { name, description, definition }) {
   const set = await QuestionSet.findByPk(id);
   if (!set) throw new NotFoundError('Question set not found');
 
-  if (definition !== undefined) {
-    const check = validateQuestionSetDefinition(definition);
+  const clean = definition !== undefined ? stripClientMeta(definition) : undefined;
+  if (clean !== undefined) {
+    const check = validateQuestionSetDefinition(clean);
     if (!check.valid) throw new ValidationError('Invalid question set definition', check.errors);
+    await assertKeysPreserved(id, clean);
   }
 
   const latest = await QuestionSetVersion.findByPk(set.latestVersionId);
@@ -81,7 +102,7 @@ async function updateDraft(id, { name, description, definition }) {
       questionSetId: set.id,
       versionNo: latest.versionNo + 1,
       status: 'draft',
-      definition: definition !== undefined ? definition : latest.definition,
+      definition: clean !== undefined ? clean : latest.definition,
     });
     await set.update({
       latestVersionId: newVersion.id,
@@ -93,8 +114,8 @@ async function updateDraft(id, { name, description, definition }) {
       name: name !== undefined ? name.trim() : set.name,
       description: description !== undefined ? description : set.description,
     });
-    if (definition !== undefined) {
-      await latest.update({ definition });
+    if (clean !== undefined) {
+      await latest.update({ definition: clean });
     }
   }
   return getQuestionSet(id);
@@ -112,6 +133,7 @@ async function publishQuestionSet(id) {
   if (!check.valid) {
     throw new ValidationError('Cannot publish: invalid definition', check.errors);
   }
+  await assertKeysPreserved(id, version.definition);
 
   const t = await version.sequelize.transaction();
   try {

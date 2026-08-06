@@ -294,11 +294,11 @@ Tasks:
 Tasks:
 
 **Semantic keys for repeatable groups (kill the id/rename hack):**
-- [ ] P1 Give each repeatable group an optional `key` (auto-slug, adjustable) in the question-set definition — the same way flags/computed already have `key` (`approved UI pattern`).
-- [ ] P1 Rule `includeGroups`/`groupMaps` continue to reference groups by their `key`; `evaluate` emits the canonical list under the **key** (falling back to the raw id for existing sets).
-- [ ] P1 Canonical paths become readable and stable: `children[].Child Full Name` instead of `q8q1k39[].Child Full Name`.
-- [ ] P1 Remove the frontend rename/display maps (`PathSelect.jsx`, `TemplateEditorPage.jsx`, `SampleTree.jsx`) once keys are stored — no more display-only translation.
-- [ ] P1 Backfill demo data: add `key: "children"` to the Estate Planning questionnaire and re-map the IRLT template to `children[]` via the new-version flow (below).
+- [x] P1 Give each repeatable group an optional `key` (auto-slug, adjustable) in the question-set definition — the same way flags/computed already have `key` (`approved UI pattern`). *(Delivered in Phase 16 — the question **key itself** is the id, auto-slugged + editable in draft + locked after publish; no second field needed since definitions are JSON blobs.)*
+- [x] P1 Rule `includeGroups`/`groupMaps` continue to reference groups by their `key`; `evaluate` emits the canonical list under the **key** (falling back to the raw id for existing sets). *(Keys are the ids — evaluate already emits under them; new questions now get readable keys at creation.)*
+- [x] P1 Canonical paths become readable and stable: `children[].Child Full Name` instead of `q8q1k39[].Child Full Name`. *(Phase 14 human labels + Phase 16 auto-slug keys.)*
+- [ ] P1 Remove the frontend rename/display maps (`PathSelect.jsx`, `TemplateEditorPage.jsx`, `SampleTree.jsx`) once keys are stored — no more display-only translation. *(Still needed: keys ≠ labels, so id→label display translation remains for readability.)*
+- [x] P1 Backfill demo data: add `key: "children"` to the Estate Planning questionnaire and re-map the IRLT template to `children[]` via the new-version flow (below). *(Superseded — all demo data was deleted by the admin; fresh question sets now get semantic keys from the start.)*
 
 **Template versioning gap (found during demo):**
 - [x] P1 Add "create draft v2 from published" — a version-clone endpoint (`POST /templates/:id/versions`) that copies the published storage key + extracted variables into a new draft row; no closed-by-design dead end for editing a published template.
@@ -385,6 +385,23 @@ Tasks:
 
 ---
 
+### Phase 16 — Semantic Keys + Publish Lock (id/key/label separation) · [P1]
+
+> **Origin:** admin review — the canonical payload mixed typed slugs (`whatIsYourTrustName`) with random uids (`qum3o6m`), and nothing prevented renaming a published question's key and silently orphaning rules/mappings. Review of real-world form builders (SurveyJS/Typeform/Jotform) concluded: separate identity from reference, keep keys human-readable, and lock keys after first publish ("Option 1 — immutable after publish"). Because definitions are JSON blobs in versioned rows (no questions table), a second `key` field was judged over-engineering — the question `id` **is** the key.
+
+Tasks:
+
+- [x] P1 **Auto-slug keys** (`QuestionSetEditorPage.jsx`): new questions/lists/row-fields get a camelCase slug from their label (`What is your trust name?` → `trustName`, `New question` → `newQuestion`), unique-suffixed on collision (`children2`). While the question's key was auto-generated (`_auto`), editing the label re-slugs it live; typing a label after the key was manually set never touches it.
+- [x] P1 **Editable key while in draft** (`AdvancedId`): the internal key is an editable input before the first publish, read-only after (`Internal key — locked after publish`).
+- [x] P1 **Publish lock (backend)** (`questions.service.js#assertKeysPreserved` + `missingKeys`): once a question set has any published version, saving or publishing with a definition that **removes or renames** an existing key is rejected (`"children" was removed or renamed — published rules and template mappings reference question keys…`); adding new questions with new keys stays allowed. Draft-before-first-publish remains fully editable.
+- [x] P1 **Meta hygiene**: `_k`/`_auto` editor-only flags are stripped client-side (`stripClientMeta`) and server-side before storage — definitions persist clean.
+- [x] P1 **Verification**: `missingKeys` unit checks (same → ok, rename → flagged, removal → flagged, addition → ok); end-to-end service test (create → publish → rename blocked with message → addition allowed) against the dev DB, cleaned up after; frontend build green.
+- [ ] P2 Backfill convenience: an admin tool to rename a key **and** rewrite rules/mappings in the same version (Option 2 cascade) — explicitly deferred; not needed for the single-product flow.
+
+**Exit criteria:** canonical payloads show readable keys for every question/list/field; keys can never silently break published rules/mappings; `AdvancedId` states its lock status; stored definitions contain no editor meta flags.
+
+---
+
 ## 6. Priority Matrix
 
 | Feature | Phase | Priority |
@@ -402,6 +419,7 @@ Tasks:
 | Download center + audit | 8 | P1 |
 | **Admin UX rethink (questions/rules/mapping)** | **10** | **P1** |
 | **DB naming & trim (rename + drop dead tables)** | **15** | **P1** |
+| **Semantic keys + publish lock (id/key/label)** | **16** | **P1** |
 | E-sign schema | 9 | P2 |
 
 **Critical path:** Phase 0 → 1 → 2 → 3 → 5 → 6 → 7 (delivers a working demo).

@@ -180,6 +180,9 @@ function FieldEditor({ field, onChange, onRemove, prefix, priorFields }) {
                   }
                 />
               </div>
+              {String(field.condition?.equals ?? '').trim() === '' && (
+                <span className="text-xs text-amber-600">Choose a triggering value (e.g. Yes) — an empty value shows the question only when the trigger is unanswered.</span>
+              )}
             </>
           )}
         </div>
@@ -321,6 +324,9 @@ function RepeatableEditor({ item, onChange, onRemove, priorFields }) {
                   onChange={(v) => onChange({ ...item, condition: { ...item.condition, equals: v } })}
                 />
               </div>
+              {String(item.condition?.equals ?? '').trim() === '' && (
+                <span className="text-xs text-amber-600">Choose a triggering value (e.g. Yes) — an empty value shows the list only when the question is unanswered.</span>
+              )}
             </>
           )}
         </div>

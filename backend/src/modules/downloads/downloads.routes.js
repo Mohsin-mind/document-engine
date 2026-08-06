@@ -1,6 +1,6 @@
 const express = require('express');
 const { asyncHandler } = require('../../common/async-handler');
-const { Submission, GenerationJob, Artifact, DocumentDefinition, TemplateVersion, Template } = require('../../db');
+const { Submission, GenerationJob, Artifact, DocumentMapping, TemplateVersion, Template } = require('../../db');
 
 const router = express.Router();
 
@@ -24,7 +24,7 @@ router.get(
           include: [
             { model: Artifact, as: 'artifacts' },
             {
-              model: DocumentDefinition,
+              model: DocumentMapping,
               include: [{ model: TemplateVersion, include: [{ model: Template }] }],
             },
           ],
@@ -38,7 +38,7 @@ router.get(
       submittedAt: submission.submittedAt,
       createdAt: submission.createdAt,
       jobs: (submission.jobs || []).map((job) => {
-        const def = job.DocumentDefinition;
+        const def = job.DocumentMapping;
         return {
           id: job.id,
           documentName: def?.name || 'Document',

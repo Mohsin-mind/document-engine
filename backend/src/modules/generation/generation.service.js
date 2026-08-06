@@ -1,4 +1,4 @@
-const { GenerationJob, Artifact, DocumentDefinition, TemplateVersion, Template } = require('../../db');
+const { GenerationJob, Artifact, DocumentMapping, TemplateVersion, Template } = require('../../db');
 const { getDocxQueue } = require('../../queues/queues');
 const { JOB_NAMES } = require('../../queues/job-names');
 
@@ -8,7 +8,7 @@ async function createAndEnqueueForSubmission(submissionId, documents) {
     if (!doc.templateKey) continue;
     const jobRow = await GenerationJob.create({
       submissionId,
-      documentDefinitionId: doc.id,
+      documentMappingId: doc.id,
       status: 'queued',
     });
     const docxKey = `artifacts/${submissionId}/${jobRow.id}/docx.docx`;
@@ -31,7 +31,7 @@ async function createAndEnqueueForSubmission(submissionId, documents) {
 }
 
 function toJobDto(job) {
-  const definition = job.DocumentDefinition;
+  const definition = job.DocumentMapping;
   return {
     id: job.id,
     documentName: definition?.name || 'Document',
@@ -57,7 +57,7 @@ async function getJobsForSubmission(submissionId) {
     include: [
       { model: Artifact, as: 'artifacts' },
       {
-        model: DocumentDefinition,
+        model: DocumentMapping,
         include: [{ model: TemplateVersion, include: [{ model: Template }] }],
       },
     ],

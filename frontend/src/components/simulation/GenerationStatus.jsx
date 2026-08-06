@@ -29,14 +29,29 @@ export default function GenerationStatus({ submissionId }) {
 
   useEffect(() => {
     let cancelled = false;
-    (async () => {
+    let timer = null;
+
+    const isTerminal = (list) =>
+      list.length > 0 && list.every((j) => j.status === 'completed' || j.status === 'failed');
+
+    const fetchJobs = async () => {
       try {
-        const initial = await getSubmissionJobs(submissionId);
-        if (!cancelled) setJobs(initial);
+        const fresh = await getSubmissionJobs(submissionId);
+        if (cancelled) return;
+        setJobs((prev) => {
+          const next = applyFresh(prev, fresh);
+          if (timer && isTerminal(next)) {
+            clearInterval(timer);
+            timer = null;
+          }
+          return next;
+        });
       } catch (e) {
         if (!cancelled) setError(e.message);
       }
-    })();
+    };
+
+    fetchJobs();
 
     const es = new EventSource(jobEventsUrl(submissionId));
     es.onmessage = (ev) => {
@@ -49,16 +64,22 @@ export default function GenerationStatus({ submissionId }) {
       if (payload.job) {
         setJobs((prev) => {
           const idx = prev.findIndex((j) => j.id === payload.job.id);
-          if (idx === -1) return [payload.job, ...prev];
-          const next = [...prev];
-          next[idx] = payload.job;
+          const next = idx === -1 ? [payload.job, ...prev] : prev.map((j, i) => (i === idx ? payload.job : j));
+          if (timer && isTerminal(next)) {
+            clearInterval(timer);
+            timer = null;
+          }
           return next;
         });
       }
     };
+
+    timer = setInterval(fetchJobs, 2000);
+
     return () => {
       cancelled = true;
       es.close();
+      if (timer) clearInterval(timer);
     };
   }, [submissionId]);
 
@@ -93,7 +114,7 @@ export default function GenerationStatus({ submissionId }) {
               className={`h-full rounded-full transition-all ${
                 job.status === 'failed' ? 'bg-red-400' : 'bg-indigo-600'
               }`}
-              style={{ width: `${job.progress || 0}%` }}
+              style={{ width: `${job.status === 'completed' ? 100 : job.progress || 0}%` }}
             />
           </div>
           {job.error && (

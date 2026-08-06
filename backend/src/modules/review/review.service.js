@@ -5,7 +5,7 @@ const {
   GenerationJob,
   Artifact,
   ReviewArtifact,
-  DocumentDefinition,
+  DocumentMapping,
   TemplateVersion,
   Template,
 } = require('../../db');
@@ -44,7 +44,7 @@ function toArtifactDto(artifact) {
 }
 
 function toJobDto(job) {
-  const def = job.DocumentDefinition;
+  const def = job.DocumentMapping;
   return {
     id: job.id,
     submissionId: job.submissionId,
@@ -90,7 +90,7 @@ async function listSubmissions({ page = 1, limit = 20 } = {}) {
             include: [ReviewArtifact],
           },
           {
-            model: DocumentDefinition,
+            model: DocumentMapping,
             include: [{ model: TemplateVersion, include: [{ model: Template }] }],
           },
         ],
@@ -118,7 +118,7 @@ async function getSubmissionWithJobs(submissionId) {
             include: [ReviewArtifact],
           },
           {
-            model: DocumentDefinition,
+            model: DocumentMapping,
             include: [{ model: TemplateVersion, include: [{ model: Template }] }],
           },
         ],

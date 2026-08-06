@@ -1,4 +1,4 @@
-const { Rule, QuestionSet, QuestionSetVersion } = require('../../db');
+const { QuestionSetRule, QuestionSet, QuestionSetVersion } = require('../../db');
 const { NotFoundError, ValidationError, ConflictError } = require('../../common/errors');
 const { validateRuleDefinition, evaluate } = require('./rule-engine');
 const { buildSampleAnswers } = require('./sample.answers');
@@ -22,7 +22,7 @@ async function ensureQuestionSet(id) {
 }
 
 async function listRules(questionSetId) {
-  const rules = await Rule.findAll({
+  const rules = await QuestionSetRule.findAll({
     where: questionSetId ? { questionSetId } : {},
     order: [['createdAt', 'DESC']],
   });
@@ -30,7 +30,7 @@ async function listRules(questionSetId) {
 }
 
 async function getRule(id) {
-  const rule = await Rule.findByPk(id);
+  const rule = await QuestionSetRule.findByPk(id);
   if (!rule) throw new NotFoundError('Rule not found');
   return toDto(rule);
 }
@@ -40,8 +40,8 @@ async function createRule({ questionSetId, definition }) {
   const check = validateRuleDefinition(definition);
   if (!check.valid) throw new ValidationError('Invalid rule definition', check.errors);
 
-  const existing = await Rule.findOne({ where: { questionSetId }, order: [['versionNo', 'DESC']] });
-  const rule = await Rule.create({
+  const existing = await QuestionSetRule.findOne({ where: { questionSetId }, order: [['versionNo', 'DESC']] });
+  const rule = await QuestionSetRule.create({
     questionSetId,
     versionNo: (existing ? existing.versionNo : 0) + 1,
     status: 'draft',
@@ -51,7 +51,7 @@ async function createRule({ questionSetId, definition }) {
 }
 
 async function updateDraft(id, { definition }) {
-  const rule = await Rule.findByPk(id);
+  const rule = await QuestionSetRule.findByPk(id);
   if (!rule) throw new NotFoundError('Rule not found');
 
   if (definition !== undefined) {
@@ -60,11 +60,11 @@ async function updateDraft(id, { definition }) {
   }
 
   if (rule.status === 'published') {
-    const latest = await Rule.findOne({
+    const latest = await QuestionSetRule.findOne({
       where: { questionSetId: rule.questionSetId },
       order: [['versionNo', 'DESC']],
     });
-    const newRule = await Rule.create({
+    const newRule = await QuestionSetRule.create({
       questionSetId: rule.questionSetId,
       versionNo: latest.versionNo + 1,
       status: 'draft',
@@ -80,7 +80,7 @@ async function updateDraft(id, { definition }) {
 }
 
 async function publishRule(id) {
-  const rule = await Rule.findByPk(id);
+  const rule = await QuestionSetRule.findByPk(id);
   if (!rule) throw new NotFoundError('Rule not found');
   if (rule.status === 'published') throw new ConflictError('Rule is already published');
 
@@ -92,14 +92,14 @@ async function publishRule(id) {
 }
 
 async function deleteRule(id) {
-  const rule = await Rule.findByPk(id);
+  const rule = await QuestionSetRule.findByPk(id);
   if (!rule) throw new NotFoundError('Rule not found');
   await rule.destroy();
   return { id };
 }
 
 async function testRule(id, { answers }) {
-  const rule = await Rule.findByPk(id);
+  const rule = await QuestionSetRule.findByPk(id);
   if (!rule) throw new NotFoundError('Rule not found');
   if (!answers || typeof answers !== 'object') throw new ValidationError('answers object is required');
   const canonical = evaluate(rule.definition, answers);
@@ -107,7 +107,7 @@ async function testRule(id, { answers }) {
 }
 
 async function generateSample(id) {
-  const rule = await Rule.findByPk(id);
+  const rule = await QuestionSetRule.findByPk(id);
   if (!rule) throw new NotFoundError('Rule not found');
   const questionSetVersion = await QuestionSetVersion.findOne({
     where: { questionSetId: rule.questionSetId },

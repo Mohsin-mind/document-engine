@@ -22,6 +22,30 @@ function collectQuestionIds(definition) {
   return ids;
 }
 
+function validateCondition(condition, seen, errors, ref) {
+  if (!condition) return;
+  const c = condition;
+  const hasField = c.field !== undefined && c.field !== null && c.field !== '';
+  const hasGroup = c.group !== undefined && c.group !== null && c.group !== '';
+  if (hasField) {
+    if (!seen.has(c.field)) {
+      errors.push(`${ref}: "show only if" must reference an earlier question or list.`);
+      return;
+    }
+    if (String(c.equals ?? '').trim() === '') {
+      errors.push(
+        `${ref}: "show only if" needs a triggering value — the field is set but no value was chosen (e.g. Yes for a Yes/No question).`
+      );
+    }
+    return;
+  }
+  if (hasGroup) {
+    if (typeof c.min !== 'number') {
+      errors.push(`${ref}: "show only if" for a list needs a minimum row count.`);
+    }
+  }
+}
+
 function validateRepeatable(list, seen, seenAt, errors, ref) {
   if (!list.id) errors.push(`${ref} is missing an internal id.`);
   else if (seen.has(list.id)) errors.push(`"${list.id}" is used more than once — ${
@@ -88,14 +112,7 @@ function validateQuestionSetDefinition(definition) {
       if (q.type === 'repeatable') {
         repeatableCount += 1;
         validateRepeatable(q, seen, seenAt, errors, ref);
-        if (q.condition) {
-          const c = q.condition;
-          const hasField = c.field && seen.has(c.field) && c.equals !== undefined;
-          const hasGroup = c.group && typeof c.min === 'number';
-          if (!hasField && !hasGroup) {
-            errors.push(`${ref}: "show only if" must reference an earlier question or list.`);
-          }
-        }
+        validateCondition(q.condition, seen, errors, ref);
         return;
       }
       if (!q.id) errors.push(`${ref} is missing an internal id.`);
@@ -113,14 +130,7 @@ function validateQuestionSetDefinition(definition) {
       if ((q.type === 'dropdown' || q.type === 'checkbox') && (!Array.isArray(q.options) || q.options.length === 0)) {
         errors.push(`${ref} is a ${typeName(q.type)} but has no options — add at least one.`);
       }
-      if (q.condition) {
-        const c = q.condition;
-        const hasField = c.field && seen.has(c.field) && c.equals !== undefined;
-        const hasGroup = c.group && typeof c.min === 'number';
-        if (!hasField && !hasGroup) {
-          errors.push(`${ref}: "show only if" must reference an earlier question or list.`);
-        }
-      }
+      validateCondition(q.condition, seen, errors, ref);
     });
     if (repeatableCount > 1) {
       errors.push(`${sectionRef} can have only one repeatable list.`);

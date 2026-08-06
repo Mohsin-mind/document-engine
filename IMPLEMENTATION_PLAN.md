@@ -368,6 +368,23 @@ Tasks:
 
 ---
 
+### Phase 15 — Database Naming & Trim (schema hygiene) · [P1]
+
+> **Origin:** schema review — 12 tables; `e_sign_requests` was dead (no module/route ever wrote or read it), `canonical_payloads` was a 1:1 cache blob that nothing read, and three table names did not reveal their role at a glance.
+
+Tasks:
+
+- [x] P1 **Drop `e_sign_requests`** (table, model, associations) — unused since creation; e-sign remains Phase 9/P2 scope (recreate via migration when wired up).
+- [x] P1 **`document_definitions` → `document_mappings`** (model `DocumentMapping`, plus FK `generation_jobs.document_definition_id` → `document_mapping_id`): the table is the mapping/config record binding `template_version_id + question_set_id`, not a "document".
+- [x] P1 **`rules` → `question_set_rules`** (model `QuestionSetRule`) so it rings as per-question-set transform rules. API paths (`/api/rules`) unchanged.
+- [x] P1 **Fold `canonical_payloads` into `submissions.canonical`** (JSONB). Data copied `UPDATE submissions SET canonical = payload FROM canonical_payloads` before dropping the table (safe down-migration included). Nothing ever read the separate table back.
+- [x] P1 **Migration + verification**: `20260806000100-db-rename-trim.js` applied to the dev DB (renames, column rename, backfill, drops); Sequelize model/association smoke test confirms `document_mapping_id` + `canonical` columns; `npm run build` unaffected (frontend talks only to `/api/templates` + `/api/rules`).
+- [ ] P2 App relies on the sample seeder only for a working demo; `db:seed` was found broken pre-existing (`queryInterface.upsert` not a Sequelize v6 function) — needs rewriting to `bulkInsert`/`ON CONFLICT` if re-run is desired.
+
+**Exit criteria:** 10 tables; every name states its relationship at a glance; no orphan/unwritten table; existing rows preserved (renames + canonical backfill).
+
+---
+
 ## 6. Priority Matrix
 
 | Feature | Phase | Priority |
@@ -384,6 +401,7 @@ Tasks:
 | Review workflow | 8 | P1 |
 | Download center + audit | 8 | P1 |
 | **Admin UX rethink (questions/rules/mapping)** | **10** | **P1** |
+| **DB naming & trim (rename + drop dead tables)** | **15** | **P1** |
 | E-sign schema | 9 | P2 |
 
 **Critical path:** Phase 0 → 1 → 2 → 3 → 5 → 6 → 7 (delivers a working demo).

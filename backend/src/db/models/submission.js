@@ -6,6 +6,7 @@ const Submission = sequelize.define('Submission', {
   questionSetVersionId: { type: DataTypes.UUID, allowNull: false },
   status: { type: DataTypes.ENUM('draft', 'submitted'), allowNull: false, defaultValue: 'draft' },
   answers: { type: DataTypes.JSONB, allowNull: false, defaultValue: {} },
+  canonical: { type: DataTypes.JSONB, allowNull: true },
   submittedAt: { type: DataTypes.DATE, allowNull: true },
 }, {
   tableName: 'submissions',

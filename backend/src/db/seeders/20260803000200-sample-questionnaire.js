@@ -172,7 +172,7 @@ module.exports = {
       updated_at: now,
     });
 
-    await queryInterface.upsert('rules', {
+    await queryInterface.upsert('question_set_rules', {
       id: ruleId,
       question_set_id: qsId,
       version_no: 1,
@@ -185,7 +185,7 @@ module.exports = {
   },
 
   async down(queryInterface) {
-    await queryInterface.bulkDelete('rules', { id: ruleId });
+    await queryInterface.bulkDelete('question_set_rules', { id: ruleId });
     await queryInterface.bulkDelete('question_set_versions', { id: qsVersionId });
     await queryInterface.bulkDelete('question_sets', { id: qsId });
   },

@@ -1,4 +1,4 @@
-const { Submission, QuestionSet, QuestionSetVersion, Rule, CanonicalPayload, DocumentDefinition, Template, TemplateVersion, GenerationJob, Artifact, ReviewArtifact } = require('../../db');
+const { Submission, QuestionSet, QuestionSetVersion, QuestionSetRule, DocumentMapping, Template, TemplateVersion, GenerationJob, Artifact, ReviewArtifact } = require('../../db');
 const { NotFoundError, ConflictError, ValidationError } = require('../../common/errors');
 const { getStorage } = require('../../common/storage');
 const { getDocxQueue, getPdfQueue } = require('../../queues/queues');
@@ -75,7 +75,7 @@ async function submit(id) {
     throw new ValidationError('Answers are invalid', check.errors.map((e) => `${e.path}: ${e.message}`));
   }
 
-  const rule = await Rule.findOne({
+  const rule = await QuestionSetRule.findOne({
     where: { questionSetId: version.questionSetId, status: 'published' },
     order: [['versionNo', 'DESC']],
   });
@@ -91,8 +91,7 @@ async function submit(id) {
 
   const t = await Submission.sequelize.transaction();
   try {
-    await submission.update({ status: 'submitted', submittedAt: new Date() }, { transaction: t });
-    await CanonicalPayload.upsert({ submissionId: submission.id, payload: canonical }, { transaction: t });
+    await submission.update({ status: 'submitted', submittedAt: new Date(), canonical }, { transaction: t });
     await t.commit();
   } catch (err) {
     await t.rollback();
@@ -103,10 +102,9 @@ async function submit(id) {
     await createAndEnqueueForSubmission(submission.id, documents);
   } catch (err) {
     await Submission.update(
-      { status: 'draft', submittedAt: null },
+      { status: 'draft', submittedAt: null, canonical: null },
       { where: { id: submission.id } }
     );
-    await CanonicalPayload.destroy({ where: { submissionId: submission.id } });
     await GenerationJob.destroy({ where: { submissionId: submission.id } });
     throw err;
   }
@@ -131,7 +129,6 @@ async function deleteSubmission(id) {
     if (jobIds.length > 0) {
       await GenerationJob.destroy({ where: { id: jobIds }, transaction: t });
     }
-    await CanonicalPayload.destroy({ where: { submissionId: id }, transaction: t });
     await submission.destroy({ transaction: t });
     await t.commit();
   } catch (err) {
@@ -175,7 +172,7 @@ async function deleteSubmission(id) {
 }
 
 async function buildDocumentPreview(questionSetId, canonical) {
-  const definitions = await DocumentDefinition.findAll({
+  const definitions = await DocumentMapping.findAll({
     where: { questionSetId, status: 'published' },
     include: [{ model: TemplateVersion, include: [{ model: Template }] }],
   });

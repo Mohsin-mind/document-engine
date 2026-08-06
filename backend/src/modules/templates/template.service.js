@@ -1,7 +1,7 @@
 const PizZip = require('pizzip');
 const { randomUUID } = require('crypto');
 const { Op } = require('sequelize');
-const { Template, TemplateVersion, DocumentDefinition, QuestionSetVersion, QuestionSet, Rule } = require('../../db');
+const { Template, TemplateVersion, DocumentMapping, QuestionSetVersion, QuestionSet, QuestionSetRule } = require('../../db');
 const { NotFoundError, ValidationError, ConflictError } = require('../../common/errors');
 const { getStorage } = require('../../common/storage');
 const { extractVariables } = require('./extract.service');
@@ -71,7 +71,7 @@ async function getTemplate(id) {
     where: { templateId: id },
     order: [['versionNo', 'DESC']],
   });
-  const definitions = await DocumentDefinition.findAll({
+  const definitions = await DocumentMapping.findAll({
     where: { templateVersionId: versions.map((v) => v.id) },
   });
   return {
@@ -86,7 +86,7 @@ async function getTemplate(id) {
 async function getVersion(templateId, versionId) {
   const version = await TemplateVersion.findOne({ where: { id: versionId, templateId } });
   if (!version) throw new NotFoundError('Template version not found');
-  const definition = await DocumentDefinition.findOne({ where: { templateVersionId: version.id } });
+  const definition = await DocumentMapping.findOne({ where: { templateVersionId: version.id } });
   return { ...toVersionDto(version), definition: toDefinitionDto(definition) };
 }
 
@@ -99,7 +99,7 @@ async function createDraftVersion(templateId) {
   });
   const latest = versions[0];
   if (!latest) throw new ValidationError('Template has no versions to copy');
-  const prevDefinition = await DocumentDefinition.findOne({ where: { templateVersionId: latest.id } });
+  const prevDefinition = await DocumentMapping.findOne({ where: { templateVersionId: latest.id } });
   const nextNo = latest.versionNo + 1;
 
   const storage = getStorage();
@@ -119,7 +119,7 @@ async function createDraftVersion(templateId) {
   });
   await template.update({ latestVersionId: version.id });
   if (prevDefinition) {
-    await DocumentDefinition.create({
+    await DocumentMapping.create({
       templateVersionId: version.id,
       questionSetId: prevDefinition.questionSetId,
       name: template.name,
@@ -159,7 +159,7 @@ async function createTemplate({ name, description, questionSetId, file }) {
     mappingStatus: 'unmapped',
   });
   await template.update({ latestVersionId: version.id });
-  await DocumentDefinition.create({
+  await DocumentMapping.create({
     templateVersionId: version.id,
     questionSetId: questionSetId || null,
     name: template.name,
@@ -301,7 +301,7 @@ async function publishTemplate(templateId, versionId) {
     throw new ValidationError('Cannot publish', failed.map((g) => `${g.name}: ${g.message}`));
   }
 
-  const definition = await DocumentDefinition.findOne({ where: { templateVersionId: version.id } });
+  const definition = await DocumentMapping.findOne({ where: { templateVersionId: version.id } });
   const t = await TemplateVersion.sequelize.transaction();
   try {
     await TemplateVersion.update(
@@ -310,12 +310,12 @@ async function publishTemplate(templateId, versionId) {
     );
     await Template.update({ status: 'published', latestVersionId: version.id }, { where: { id: templateId }, transaction: t });
     if (definition) {
-      await DocumentDefinition.update(
+      await DocumentMapping.update(
         { status: 'published', publishedAt: new Date() },
         { where: { id: definition.id }, transaction: t }
       );
       const sameTemplateVersions = await TemplateVersion.findAll({ where: { templateId } });
-      await DocumentDefinition.update(
+      await DocumentMapping.update(
         { status: 'draft', publishedAt: null },
         {
           where: {
@@ -360,7 +360,7 @@ async function generateSampleCanonical(templateId) {
     where: { templateId },
     order: [['versionNo', 'DESC']],
   });
-  const definition = await DocumentDefinition.findOne({
+  const definition = await DocumentMapping.findOne({
     where: { templateVersionId: versions[0].id },
   });
   if (!definition || !definition.questionSetId) {
@@ -373,7 +373,7 @@ async function generateSampleCanonical(templateId) {
   if (!questionSetVersion) {
     throw new ValidationError('The bound question set has no published version');
   }
-  const rule = await Rule.findOne({
+  const rule = await QuestionSetRule.findOne({
     where: { questionSetId: definition.questionSetId, status: 'published' },
     order: [['versionNo', 'DESC']],
   });
@@ -404,7 +404,7 @@ async function updateTemplateMetadata(id, { name, description, questionSetId }) 
     description: description !== undefined ? description : template.description,
   });
   if (questionSetId !== undefined) {
-    await DocumentDefinition.update(
+    await DocumentMapping.update(
       { questionSetId: questionSetId || null },
       { where: { templateVersionId: template.latestVersionId } }
     );
@@ -416,7 +416,7 @@ async function deleteTemplate(id) {
   const template = await Template.findByPk(id);
   if (!template) throw new NotFoundError('Template not found');
   const versions = await TemplateVersion.findAll({ where: { templateId: id } });
-  await DocumentDefinition.destroy({ where: { templateVersionId: versions.map((v) => v.id) } });
+  await DocumentMapping.destroy({ where: { templateVersionId: versions.map((v) => v.id) } });
   await TemplateVersion.destroy({ where: { templateId: id } });
   await template.destroy();
   return { id };

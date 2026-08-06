@@ -4,7 +4,7 @@ const { sequelize } = require('../../config/db');
 const GenerationJob = sequelize.define('GenerationJob', {
   id: { type: DataTypes.UUID, primaryKey: true, defaultValue: DataTypes.UUIDV4 },
   submissionId: { type: DataTypes.UUID, allowNull: false },
-  documentDefinitionId: { type: DataTypes.UUID, allowNull: false },
+  documentMappingId: { type: DataTypes.UUID, allowNull: false },
   status: {
     type: DataTypes.ENUM('queued', 'rendering_docx', 'converting_pdf', 'completed', 'failed'),
     allowNull: false,

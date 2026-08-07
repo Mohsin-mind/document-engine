@@ -1,6 +1,60 @@
-const { QuestionSet, QuestionSetVersion } = require('../../db');
+const { QuestionSet, QuestionSetVersion, QuestionSetRule, DocumentMapping, TemplateVersion } = require('../../db');
 const { NotFoundError, ValidationError, ConflictError } = require('../../common/errors');
-const { validateQuestionSetDefinition, stripClientMeta, missingKeys } = require('./question-set.definition');
+const {
+  validateQuestionSetDefinition,
+  stripClientMeta,
+  missingKeys,
+} = require('./question-set.definition');
+
+async function findKeyReferences(questionSetId, key) {
+  const refs = [];
+  const rules = await QuestionSetRule.findAll({
+    where: { questionSetId, status: 'published' },
+    order: [['versionNo', 'DESC']],
+    attributes: ['id', 'versionNo', 'definition'],
+  });
+  for (const r of rules) {
+    const d = r.definition || {};
+    for (const f of d.flags || []) {
+      let hit = false;
+      const descend = (w) => {
+        if (!w || hit) return;
+        if (w.field === key || w.group === key) {
+          hit = true;
+          return;
+        }
+        if (Array.isArray(w.all)) w.all.forEach(descend);
+        if (Array.isArray(w.any)) w.any.forEach(descend);
+      };
+      descend(f.when);
+      if (hit) refs.push(`rule v${r.versionNo} (flag "${f.label || f.key || 'unnamed'}")`);
+    }
+    for (const c of d.computed || []) {
+      const raw = String(c.template !== undefined ? c.template : c.value || '');
+      if (raw.includes(`{answers.${key}}`) || raw.includes(`{answers.${key}.`)) {
+        refs.push(`rule v${r.versionNo} (computed "${c.label || c.key || 'unnamed'}")`);
+      }
+    }
+    if ((d.includeGroups || []).includes(key)) refs.push(`rule v${r.versionNo} (list "${key}")`);
+    if (d.groupMaps && Object.prototype.hasOwnProperty.call(d.groupMaps, key)) {
+      refs.push(`rule v${r.versionNo} (list mapping "${key}")`);
+    }
+  }
+
+  const maps = await DocumentMapping.findAll({
+    where: { questionSetId, status: 'published' },
+    include: [{ model: TemplateVersion }],
+  });
+  for (const m of maps) {
+    const tv = m.TemplateVersion;
+    const used = (tv?.extractedVariables || []).some((v) => {
+      const p = v.jsonPath || '';
+      return p === key || p.startsWith(`${key}.`) || p.startsWith(`${key}[`);
+    });
+    if (used) refs.push(`template "${m.name}"${tv ? ` v${tv.versionNo}` : ''}`);
+  }
+  return refs;
+}
 
 async function assertKeysPreserved(questionSetId, nextDefinition) {
   const published = await QuestionSetVersion.findOne({
@@ -9,15 +63,19 @@ async function assertKeysPreserved(questionSetId, nextDefinition) {
   });
   if (!published) return;
   const missing = missingKeys(published.definition, nextDefinition);
-  if (missing.length > 0) {
-    throw new ValidationError(
-      'Question keys are locked after publish',
-      missing.map(
-        (id) =>
-          `"${id}" was removed or renamed — published rules and template mappings reference question keys. Add a new question with a new key instead.`
-      )
-    );
+  if (missing.length === 0) return;
+
+  const blocked = [];
+  for (const key of missing) {
+    const refs = await findKeyReferences(questionSetId, key);
+    if (refs.length > 0) {
+      blocked.push(
+        `"${key}" is still used by ${refs.join(' and ')} — update or remove those references first (publish a new rule or template version without them), then you can remove or rename this question. Or keep the question and add a new one with a new key instead.`
+      );
+    }
   }
+  if (blocked.length === 0) return;
+  throw new ValidationError('Question keys are locked after publish', blocked);
 }
 
 function toDto(questionSet) {

@@ -194,10 +194,32 @@ function validateQuestionSetDefinition(definition) {
   return { valid: errors.length === 0, errors };
 }
 
+function answerKeysReferencedInRuleDefinition(definition) {
+  const keys = new Set();
+  const walkWhen = (w) => {
+    if (!w || typeof w !== 'object') return;
+    if (Array.isArray(w.all)) w.all.forEach(walkWhen);
+    if (Array.isArray(w.any)) w.any.forEach(walkWhen);
+    if (w.field) keys.add(w.field);
+    if (w.group) keys.add(w.group);
+  };
+  (definition?.flags || []).forEach((f) => walkWhen(f.when));
+  (definition?.computed || []).forEach((c) => {
+    const raw = c.template !== undefined ? c.template : c.value;
+    for (const m of String(raw || '').matchAll(/\{answers\.([^}]+)\}/g)) {
+      keys.add(m[1].split('.')[0]);
+    }
+  });
+  (definition?.includeGroups || []).forEach((g) => keys.add(g));
+  Object.keys(definition?.groupMaps || {}).forEach((g) => keys.add(g));
+  return keys;
+}
+
 module.exports = {
   validateQuestionSetDefinition,
   QUESTION_TYPES,
   collectQuestionIds,
   stripClientMeta,
   missingKeys,
+  answerKeysReferencedInRuleDefinition,
 };
